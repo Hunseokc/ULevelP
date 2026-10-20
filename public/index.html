@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>기타 코드 연습실</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script>try { var t = localStorage.getItem('gv-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="head-row">
+      <h1>기타 코드 연습실</h1>
+      <div class="theme" role="group" aria-label="화면 모드"><button type="button" id="theme-light" aria-pressed="false">라이트</button><button type="button" id="theme-dark" aria-pressed="false">다크</button></div>
+    </div>
+    <p class="sub">스케일과 코드톤 지도로 지판을 익히고, 보이싱을 체계로 쌓고, 탑노트로 연결하고, 한 모양을 여러 코드로 우기는 순서의 코드 연습실입니다. 모든 폼은 코드 구성음으로 직접 계산합니다.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="연습 모드">
+    <button class="tab" role="tab" id="tab-scale" aria-selected="true">1 · 스케일 연습</button>
+    <button class="tab" role="tab" id="tab-tone" aria-selected="false">2 · 코드톤 지도</button>
+    <button class="tab" role="tab" id="tab-matrix" aria-selected="false">3 · 보이싱 매트릭스</button>
+    <button class="tab" role="tab" id="tab-circle" aria-selected="false">4 · 탑노트 5도권</button>
+    <button class="tab" role="tab" id="tab-reint" aria-selected="false">5 · 우기기</button>
+    <button class="tab" role="tab" id="tab-tf" aria-selected="false">6 · 2-5-1 탐색</button>
+  </nav>
+
+  <!-- 1. 스케일 연습 -->
+  <section class="pane" id="pane-scale" role="tabpanel">
+    <div class="panel">
+      <div class="sc-head">
+        <h2 class="sc-title" id="sc-title"></h2>
+        <div class="sc-notes" id="sc-notes"></div>
+      </div>
+      <div class="sc-circle" id="sc-circle" hidden>
+        <div id="sc-wheel"></div>
+        <div class="sc-cinfo">
+          <div class="note" id="sc-change"></div>
+          <div class="note" id="sc-next"></div>
+          <div class="row"><button class="ghost" id="sc-prev">← 이전 키</button><button class="ghost" id="sc-nextb">다음 키 →</button></div>
+        </div>
+      </div>
+      <div class="scroll" id="sc-board"></div>
+      <div class="sc-sliders">
+        <label class="sc-sl"><span>전체 보기</span><input type="range" id="sc-zoom" min="0" max="18" value="10" aria-label="확대"><span>확대</span></label>
+        <label class="sc-sl"><span>◀ 낮은 프렛</span><input type="range" id="sc-pos" min="0" max="10" value="0" aria-label="보이는 프렛 위치"><span>높은 프렛 ▶</span></label>
+      </div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>스케일 구성음</span><span id="sc-leg-moved" hidden><i class="m"></i>직전 키에서 바뀐 음</span><span><i class="n"></i>지금 칠 음</span><span>점을 누르면 소리가 나요</span></div>
+    </div>
+    <div class="panel">
+      <h3 class="h3 sc-sec">프렛보드 설정</h3>
+      <div class="controls">
+        <div class="field"><span class="lab">연습 방식</span><div class="chips" id="sc-mode"></div></div>
+        <div class="field"><label for="sc-root" id="sc-root-lab">루트 음</label><select id="sc-root"></select></div>
+        <div class="field"><label for="sc-type">스케일 종류</label><select id="sc-type"></select></div>
+        <div class="field"><span class="lab">표기</span><div class="chips" id="sc-label"></div></div>
+        <div class="field"><label for="sc-inst">악기</label><select id="sc-inst"></select></div>
+        <div class="field"><span class="lab">손잡이</span><div class="chips" id="sc-hand"></div></div>
+      </div>
+      <div class="controls" id="sc-circle-opts" hidden>
+        <div class="field"><span class="lab">순환 방향</span><div class="chips" id="sc-dir"></div></div>
+        <div class="field"><label for="sc-bars">키 하나당</label><select id="sc-bars"><option value="0" selected>스케일 한 바퀴</option><option value="1">1마디</option><option value="2">2마디</option><option value="4">4마디</option></select></div>
+      </div>
+      <div class="controls">
+        <div class="field"><span class="lab">재생 범위</span><div class="chips" id="sc-range"></div></div>
+        <div class="field"><label for="sc-bpm">BPM (8분음표)</label><input id="sc-bpm" type="number" min="30" max="220" value="90"></div>
+        <div class="check"><input id="sc-rootonly" type="checkbox"><label for="sc-rootonly">근음만 보기 (암기 연습)</label></div>
+      </div>
+      <div class="row"><button class="playbtn" id="sc-play" aria-pressed="false">재생</button><span class="status" id="sc-status"></span></div>
+    </div>
+  </section>
+
+  <!-- 2. 코드톤 지도 -->
+  <section class="pane" id="pane-tone" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>한 줄에 코드톤 두 개씩.</b> 6번줄부터 1번줄까지 4화음을 끊김 없이 훑어요. maj7 폼을 기준으로 한 음씩 반음 내리면 7, m7, m7(b5), dim7이 되고, 움직인 음은 점선으로 표시됩니다.</p>
+      <div class="controls">
+        <div class="field"><label for="tone-root">근음</label><select id="tone-root"></select></div>
+        <div class="field"><label for="tone-near">6번줄 시작 프렛 부근</label><input id="tone-near" type="number" min="1" max="12" value="3"></div>
+        <div class="field"><label for="tone-bpm">BPM (8분음표)</label><input id="tone-bpm" type="number" min="30" max="220" value="80"></div>
+        <div class="check"><input id="tone-auto" type="checkbox"><label for="tone-auto">한 바퀴마다 다음 성질로</label></div>
+      </div>
+      <div class="field"><span class="lab">시작 도수 패턴</span><div class="chips" id="tone-start"></div></div>
+      <div class="field"><span class="lab">코드 성질 (변환 순서)</span><div class="chips" id="tone-q"></div></div>
+      <div class="row"><div class="chips" id="tone-dir"></div><button class="playbtn" id="tone-play" aria-pressed="false">재생</button></div>
+    </div>
+    <div class="panel">
+      <h3 class="h3" id="tone-title"></h3>
+      <div class="scroll" id="tone-board"></div>
+      <div class="seq" id="tone-seq" aria-label="연주 순서 (줄·프렛)"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도</span><span><i class="o"></i>5도</span><span><i class="m"></i>maj7에서 움직인 음</span><span><i class="n"></i>지금 칠 음</span></div>
+    </div>
+  </section>
+
+  <!-- 3. 보이싱 매트릭스 -->
+  <section class="pane" id="pane-matrix" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>드롭 × 전위 × 줄 세트 × 성질.</b> 네 변수를 고르면 폼이 계산돼요. 아래 줄에는 같은 자리에서 maj7 → dim7까지 9개 성질이 이어지고, 각 칸에 직전 코드에서 어느 줄을 몇 프렛 옮기는지 적혀 있습니다.</p>
+      <div class="controls">
+        <div class="field"><label for="mx-root">근음</label><select id="mx-root"></select></div>
+        <div class="field"><label for="mx-span">손 폭</label><select id="mx-span"><option value="3">4프렛</option><option value="4" selected>5프렛</option><option value="5">6프렛</option></select></div>
+        <div class="field"><label for="mx-bpm">BPM</label><input id="mx-bpm" type="number" min="30" max="200" value="70"></div>
+        <div class="field"><label for="mx-beats">성질 하나당</label><select id="mx-beats"><option value="2">2박</option><option value="4" selected>4박</option><option value="8">8박</option></select></div>
+      </div>
+      <div class="field"><span class="lab">드롭</span><div class="chips" id="mx-drop"></div></div>
+      <div class="field"><span class="lab">전위 (결과 보이싱의 베이스 기준)</span><div class="chips" id="mx-inv"></div></div>
+      <div class="field"><span class="lab">줄 세트 (손 폭 안에서 잡히는 것만)</span><div class="chips" id="mx-set"></div></div>
+      <div class="field"><span class="lab">위치</span><div class="chips" id="mx-place"></div></div>
+      <div class="row"><button class="playbtn" id="mx-play" aria-pressed="false">재생</button><span class="status" id="mx-count"></span></div>
+    </div>
+    <div class="panel">
+      <h3 class="h3">지판에서 보기 <span class="meta" id="mx-btitle"></span></h3>
+      <div class="scroll" id="mx-board"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도 자리</span><span><i class="o"></i>5도 자리</span><span><i class="ctxk"></i>지판 전체의 같은 코드톤</span><span><i class="blkk"></i>손 위치</span></div>
+      <h3 class="h3">같은 자리에서 9개 성질 순환 <span class="meta" id="mx-struct"></span></h3>
+      <div class="strip" id="mx-strip"></div>
+      <div id="mx-alt"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도 자리</span><span><i class="o"></i>5도 자리</span><span><i class="m"></i>직전 코드에서 움직인 음</span><span>칸을 누르면 소리가 나요</span></div>
+    </div>
+  </section>
+
+  <!-- 4. 탑노트 5도권 -->
+  <section class="pane" id="pane-circle" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>탑노트는 그대로, 근음만 5도씩 아래로.</b> 같은 음이 9 → 13 → 3 → … 로 역할을 바꿔요. 베이스가 근음을, 높은 음이 고정된 탑노트를 들려줍니다. 스페이스나 → 키로 다음 코드로 넘어갑니다.</p>
+      <div class="controls">
+        <div class="field"><label for="cc-root">시작 근음</label><select id="cc-root"></select></div>
+        <div class="field"><label for="cc-top">시작 탑노트 도수</label><select id="cc-top"></select></div>
+        <div class="field"><label for="cc-str">탑노트 줄</label><select id="cc-str"><option value="5" selected>1번줄</option><option value="4">2번줄</option><option value="3">3번줄</option></select></div>
+        <div class="field"><label for="cc-near">프렛 부근</label><input id="cc-near" type="number" min="1" max="17" value="8"></div>
+        <div class="field"><label for="cc-bpm">BPM</label><input id="cc-bpm" type="number" min="30" max="200" value="60"></div>
+        <div class="field"><label for="cc-beats">코드 하나당</label><select id="cc-beats"><option value="2">2박</option><option value="4" selected>4박</option><option value="8">8박</option></select></div>
+        <div class="check"><input id="cc-hint" type="checkbox" checked><label for="cc-hint">폼 힌트 보기</label></div>
+        <div class="check"><input id="cc-topsnd" type="checkbox" checked><label for="cc-topsnd">탑노트 소리</label></div>
+        <div class="check"><input id="cc-skip" type="checkbox" checked><label for="cc-skip">maj7 칸 건너뛰기</label></div>
+      </div>
+      <div class="row"><button class="ghost" id="cc-prev">← 이전</button><button class="playbtn" id="cc-play" aria-pressed="false">재생</button><button class="ghost" id="cc-nextb">다음 →</button></div>
+    </div>
+    <div class="panel">
+      <div class="cc-top">
+        <div id="cc-wheel"></div>
+        <div class="cc-info">
+          <div class="big" id="cc-name"></div>
+          <div class="bigdeg" id="cc-deg"></div>
+          <div class="note" id="cc-where"></div>
+          <div class="note" id="cc-next"></div>
+        </div>
+        <div class="cc-hints" id="cc-hints"></div>
+      </div>
+      <div class="scroll" id="cc-board"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도</span><span><i class="o"></i>5도·텐션</span><span><i class="ctxk"></i>지판 전체의 같은 코드톤</span><span><i class="blkk"></i>손 위치</span><span>코드 그림을 누르면 지판에 표시돼요</span></div>
+      <div class="stepstrip" id="cc-strip"></div>
+      <details id="cc-all"><summary>이 탑노트로 잡히는 모든 도미넌트 보기</summary><div id="cc-alllist"></div></details>
+    </div>
+  </section>
+
+  <!-- 5. 우기기 -->
+  <section class="pane" id="pane-reint" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>한 모양, 여러 코드.</b> 지판에 음을 찍거나 예시 모양을 고르면, 그 배열을 메이저·마이너·도미넌트·서스·하프디미니시로 우길 수 있는 근음과 코드명을 모두 찾아요. 해석을 누르면 그 근음을 베이스로 깔고 들려줍니다.</p>
+      <div class="chips" id="ri-presets"></div>
+      <div class="scroll" id="ri-board"></div>
+      <div class="row"><button class="ghost" id="ri-hear">모양만 듣기</button><button class="ghost" id="ri-clear">지우기</button><span class="note">줄마다 한 음. 같은 칸을 다시 누르면 지워져요.</span></div>
+    </div>
+    <div class="panel">
+      <div class="ri-grid">
+        <div class="ri-shape" id="ri-shape"></div>
+        <div id="ri-list"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 class="h3">이 모양 하나로 2-5-1</h3>
+      <p class="lead">같은 모양을 옮겨서 ii, V, I 자리에 각각 우겨 넣어요. 칠 수 없는 자리는 그렇게 표시합니다.</p>
+      <div class="controls">
+        <div class="field"><label for="ri-key">키</label><select id="ri-key"></select></div>
+        <div class="field"><label for="ri-bpm">BPM</label><input id="ri-bpm" type="number" min="40" max="200" value="90"></div>
+      </div>
+      <div class="boxrow" id="ri-swap"></div>
+      <div class="row"><button class="playbtn" id="ri-play" aria-pressed="false">재생</button></div>
+    </div>
+    <div class="panel">
+      <h3 class="h3">우기기 퀴즈 <span class="meta" id="qz-score"></span></h3>
+      <div class="quiz">
+        <div class="ri-shape" id="qz-box"></div>
+        <div class="field" style="gap:10px">
+          <p class="qtext" id="qz-text"></p>
+          <div class="opts" id="qz-opts"></div>
+          <p class="fb" id="qz-fb" aria-live="polite"></p>
+          <div class="row"><button class="ghost" id="qz-hear">듣기</button><button class="btn" id="qz-next">다음 문제</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. 2-5-1 탐색 -->
+  <section class="pane" id="pane-tf" role="tabpanel" hidden>
+    <div class="panel">
+      <p class="lead"><b>프렛 창 안의 2-5-1.</b> 정해진 프렛 범위(와 펜타토닉) 안에서 가이드톤 이동이 가장 짧은 ii-V-I 보이싱을 키별로 찾아요.</p>
+      <div class="controls">
+        <div class="field"><label for="a-kind">진행</label><select id="a-kind"><option value="major">메이저 ii-V-I</option><option value="minor">마이너 iiø-V-i</option></select></div>
+        <div class="field"><label for="a-lo">프렛 창 시작</label><input id="a-lo" type="number" min="1" max="17" value="5"></div>
+        <div class="field"><label for="a-hi">프렛 창 끝</label><input id="a-hi" type="number" min="1" max="19" value="8"></div>
+        <div class="field"><label for="a-proot">펜타 루트</label><select id="a-proot"></select></div>
+        <div class="field"><label for="a-ptype">펜타 종류</label><select id="a-ptype"><option value="min">마이너 펜타</option><option value="maj">메이저 펜타</option></select></div>
+        <div class="field"><label for="a-out">펜타 밖 음 허용</label><select id="a-out"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+        <div class="field"><label for="a-guide">가이드톤 필수</label><select id="a-guide"><option value="2" selected>3도·7도 둘 다</option><option value="1">하나만</option></select></div>
+        <div class="check"><input id="a-pent" type="checkbox" checked><label for="a-pent">펜타 제한 사용</label></div>
+        <div class="check"><input id="a-var" type="checkbox"><label for="a-var">텐션·변형 코드 포함</label></div>
+      </div>
+      <div class="row"><button class="btn" id="a-go">탐색</button><span class="status" id="a-status"></span></div>
+    </div>
+    <div class="panel" id="a-view" hidden>
+      <h3 class="h3"><span id="a-vtitle"></span><span class="meta" id="a-vmeta"></span></h3>
+      <div class="row"><div class="chips" id="a-vchips"></div><button class="ghost" id="a-vplay">2-5-1 듣기</button></div>
+      <div class="scroll" id="a-board"></div>
+      <div class="legend"><span><i class="r"></i>근음</span><span><i class="g"></i>3도·7도</span><span><i class="o"></i>5도·텐션</span><span><i class="ctxk"></i><span id="a-vctxl">펜타토닉 (펜타 도수)</span></span><span><i class="blkk"></i>프렛 창</span><span>아래 결과의 코드를 누르면 여기에 표시돼요</span></div>
+    </div>
+    <div id="a-out-list" class="results"></div>
+  </section>
+
+</div>
+
+<script src="/lib/voicing.js"></script>
+<script src="/lib/theory.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
