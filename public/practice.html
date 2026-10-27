@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>연습 플레이어</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="연습 플레이어">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="practice.css">
+<script>try { var t = localStorage.getItem('gv-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body class="pp">
+<div class="pp-wrap">
+  <header class="pp-head">
+    <a class="pp-back" href="./" aria-label="코드 연습실로">‹ 연습실</a>
+    <div class="pp-title">
+      <b id="songTitle">연습 플레이어</b>
+      <span id="syncState" class="pp-sync" aria-live="polite"></span>
+    </div>
+    <button type="button" class="ghost pp-lib-btn" id="libBtn" aria-expanded="false" aria-controls="lib">곡 목록</button>
+  </header>
+
+  <main class="pp-main">
+    <section class="pp-stage">
+      <div class="pp-video" id="videoBox">
+        <div id="player"></div>
+        <div class="pp-empty" id="emptyState">
+          <p><b>연습할 영상을 고르세요</b></p>
+          <p class="note">곡 목록에서 고르거나, 유튜브 링크를 붙여넣으세요.</p>
+          <form class="pp-url" id="urlForm">
+            <input type="url" id="urlInput" placeholder="https://youtu.be/…" inputmode="url" autocomplete="off" aria-label="유튜브 링크">
+            <button class="btn" type="submit">열기</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="pp-seek" id="seekRow">
+        <span class="pp-time" id="tNow">0:00</span>
+        <div class="pp-bar" id="bar">
+          <div class="pp-bar-loop" id="barLoop"></div>
+          <div class="pp-bar-fill" id="barFill"></div>
+          <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="재생 위치">
+        </div>
+        <span class="pp-time" id="tDur">0:00</span>
+      </div>
+    </section>
+
+    <section class="pp-ctl" aria-label="연습 조작">
+      <div class="pp-group">
+        <div class="pp-lab">속도</div>
+        <div class="pp-seg" id="rates" role="group" aria-label="재생 속도"></div>
+      </div>
+
+      <div class="pp-group">
+        <div class="pp-lab"><span>구간 반복 · 시작 전 여유</span><span id="loopInfo" class="pp-loopinfo"></span></div>
+        <div class="pp-ab">
+          <div class="pp-pt">
+            <button type="button" class="pp-nudge" data-pt="a" data-d="-0.2" aria-label="A 0.2초 앞으로">−</button>
+            <button type="button" class="pp-setpt" id="setA"><small>A</small><span id="aTime">--:--</span></button>
+            <button type="button" class="pp-nudge" data-pt="a" data-d="0.2" aria-label="A 0.2초 뒤로">+</button>
+          </div>
+          <div class="pp-pt">
+            <button type="button" class="pp-nudge" data-pt="b" data-d="-0.2" aria-label="B 0.2초 앞으로">−</button>
+            <button type="button" class="pp-setpt" id="setB"><small>B</small><span id="bTime">--:--</span></button>
+            <button type="button" class="pp-nudge" data-pt="b" data-d="0.2" aria-label="B 0.2초 뒤로">+</button>
+          </div>
+        </div>
+        <div class="pp-looprow">
+          <button type="button" class="pp-toggle" id="loopBtn" aria-pressed="false">반복</button>
+          <div class="pp-seg pp-lead" id="leads" role="group" aria-label="반복 전 여유"></div>
+          <button type="button" class="pp-icon" id="clearBtn" aria-label="구간 지우기">✕</button>
+        </div>
+      </div>
+
+      <div class="pp-transport">
+        <button type="button" class="pp-tbtn" id="backBtn" aria-label="5초 뒤로">−5</button>
+        <button type="button" class="pp-tbtn" id="startBtn" aria-label="구간 처음으로">⏮</button>
+        <button type="button" class="pp-tbtn pp-play" id="playBtn" aria-label="재생">▶</button>
+        <button type="button" class="pp-tbtn" id="fwdBtn" aria-label="5초 앞으로">+5</button>
+        <button type="button" class="pp-tbtn" id="saveBtn" aria-label="노션에 저장">저장</button>
+      </div>
+      <p class="note pp-hint" id="kbdHint">키보드: Space 재생 · 1~4 속도 · [ ] A·B · L 반복 · R 구간 처음</p>
+    </section>
+  </main>
+</div>
+
+<aside class="pp-lib" id="lib" hidden>
+  <div class="pp-lib-head">
+    <b>연습 곡</b>
+    <button type="button" class="pp-icon" id="libClose" aria-label="닫기">✕</button>
+  </div>
+  <form class="pp-url" id="urlForm2">
+    <input type="url" id="urlInput2" placeholder="유튜브 링크 붙여넣기" inputmode="url" autocomplete="off" aria-label="유튜브 링크">
+    <button class="btn" type="submit">열기</button>
+  </form>
+  <ul class="pp-songs" id="songs"></ul>
+  <details class="pp-settings" id="settings">
+    <summary>노션 연결 설정</summary>
+    <label class="field"><span class="lab">중계 서버 주소</span><input type="url" id="apiUrl" placeholder="https://practice-notion.이름.workers.dev" autocomplete="off"></label>
+    <label class="field"><span class="lab">비밀 키</span><input type="password" id="apiKey" autocomplete="off"></label>
+    <div class="row"><button type="button" class="btn" id="apiSave">저장 후 연결 확인</button><span class="note" id="apiMsg"></span></div>
+    <p class="note">이 기기 브라우저에만 저장됩니다. 노션 페이지 안에서 열었을 때는 따로 한 번 더 넣어야 할 수 있어요.</p>
+  </details>
+</aside>
+<div class="pp-scrim" id="scrim" hidden></div>
+
+<script src="practice.js"></script>
+</body>
+</html>

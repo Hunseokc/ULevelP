@@ -1,0 +1,509 @@
+// 연습 플레이어: 유튜브 임베드 + 속도 버튼 + A-B 구간 반복 + 노션 자동 저장(중계 서버 경유)
+'use strict';
+(function () {
+  const RATES = [0.25, 0.5, 0.75, 1];
+  const LEADS = [0, 1, 2];
+  const AUTOSAVE_MS = 30000;
+  const PLAYER_PATH = location.origin + location.pathname;
+
+  const $ = (id) => document.getElementById(id);
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (s, tenths) => {
+    if (s == null || isNaN(s)) return '--:--';
+    const m = Math.floor(s / 60), r = s - m * 60;
+    return tenths ? m + ':' + r.toFixed(1).padStart(4, '0') : m + ':' + pad(Math.floor(r));
+  };
+  const round1 = (x) => Math.round(x * 10) / 10;
+  const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 무시 */ } },
+  };
+
+  function videoIdFrom(text) {
+    const s = String(text || '').trim();
+    if (/^[\w-]{11}$/.test(s)) return s;
+    try {
+      const u = new URL(s);
+      if (/(^|\.)youtu\.be$/.test(u.hostname)) return u.pathname.slice(1, 12) || null;
+      if (u.searchParams.get('v')) return u.searchParams.get('v').slice(0, 11);
+      const m = u.pathname.match(/\/(shorts|embed|live)\/([\w-]{11})/);
+      return m ? m[2] : null;
+    } catch (e) { return null; }
+  }
+  const num = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+
+  // ---------- 상태 ----------
+  const st = {
+    videoId: null, song: null, ready: false, playing: false, duration: 0,
+    a: null, b: null, loopOn: false, lead: store.get('pp-lead', 1), rate: 1,
+    loops: 0, unsavedSec: 0, unsavedLoops: 0, dirty: false, seekGuardUntil: 0,
+    saving: false, savePending: false, startAt: 0,
+  };
+  let player = null, ytReady = false, pendingLoad = null;
+
+  // ---------- 중계 서버(API) ----------
+  const api = {
+    url() { return (store.get('pp-api', '') || '').replace(/\/+$/, ''); },
+    key() { return store.get('pp-key', ''); },
+    ok() { return !!(this.url() && this.key()); },
+    async call(path, body, opts) {
+      if (!this.ok()) throw new Error('노션 연결 설정이 필요해요');
+      const res = await fetch(this.url() + path, {
+        method: body ? 'POST' : 'GET',
+        headers: Object.assign({ 'X-Practice-Key': this.key() }, body ? { 'Content-Type': 'application/json' } : {}),
+        body: body ? JSON.stringify(body) : undefined,
+        keepalive: !!(opts && opts.keepalive),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || '서버 오류 (' + res.status + ')');
+      return data;
+    },
+  };
+
+  // 노션 임베드 등에서 한 번에 설정: practice.html#api=...&k=...
+  (function readHashSetup() {
+    if (!location.hash) return;
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (h.get('api')) store.set('pp-api', h.get('api'));
+    if (h.get('k')) store.set('pp-key', h.get('k'));
+    if (h.get('api') || h.get('k')) history.replaceState(null, '', location.pathname + location.search);
+  })();
+
+  // ---------- 화면 ----------
+  const rateBtns = RATES.map((r) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = r === 1 ? '1.0' : String(r); b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => setRate(r));
+    $('rates').appendChild(b); return b;
+  });
+  const leadBtns = LEADS.map((s) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = s + '초'; b.setAttribute('aria-label', '반복 전 여유 ' + s + '초'); b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => { st.lead = s; store.set('pp-lead', s); render(); });
+    $('leads').appendChild(b); return b;
+  });
+
+  let syncMsg = '', syncErr = false;
+  function setSync(msg, err) { syncMsg = msg; syncErr = !!err; renderSync(); }
+  function renderSync() {
+    const el = $('syncState');
+    el.textContent = syncMsg || (st.song ? '노션 연결됨' : '');
+    el.classList.toggle('err', syncErr);
+  }
+
+  function render() {
+    const hasA = st.a != null, hasB = st.b != null;
+    rateBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Math.abs(RATES[i] - st.rate) < 0.001)));
+    leadBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(LEADS[i] === st.lead)));
+    $('aTime').textContent = fmt(st.a, true);
+    $('bTime').textContent = fmt(st.b, true);
+    $('setA').classList.toggle('set', hasA);
+    $('setB').classList.toggle('set', hasB);
+    $('loopBtn').disabled = !(hasA && hasB);
+    $('loopBtn').setAttribute('aria-pressed', String(st.loopOn));
+    $('loopBtn').textContent = st.loopOn ? '반복 중' : '반복';
+    $('loopInfo').textContent = hasA && hasB ? (st.b - st.a).toFixed(1) + '초' + (st.loopOn && st.loops ? ' · ' + st.loops + '회' : '') : '';
+    $('playBtn').textContent = st.playing ? '❚❚' : '▶';
+    $('playBtn').setAttribute('aria-label', st.playing ? '일시정지' : '재생');
+    $('songTitle').textContent = st.song ? st.song.title : (st.videoId ? (videoTitle() || '연습 플레이어') : '연습 플레이어');
+    $('emptyState').hidden = !!st.videoId;
+    const save = $('saveBtn');
+    save.textContent = api.ok() && st.videoId && !st.song ? '노션 추가' : '저장';
+    save.disabled = !st.videoId;
+    save.classList.toggle('dirty', st.dirty);
+    renderBar();
+    renderSync();
+    renderSongs();
+  }
+
+  function renderBar() {
+    const d = st.duration || 0;
+    const t = player && st.ready ? safeTime() : 0;
+    $('tNow').textContent = fmt(t);
+    $('tDur').textContent = fmt(d);
+    $('barFill').style.width = d ? (t / d * 100) + '%' : '0';
+    if (!seeking) $('seek').value = d ? String(Math.round(t / d * 1000)) : '0';
+    const loop = $('barLoop');
+    if (d && st.a != null && st.b != null) {
+      loop.style.display = 'block';
+      loop.style.left = (st.a / d * 100) + '%';
+      loop.style.width = ((st.b - st.a) / d * 100) + '%';
+    } else loop.style.display = 'none';
+  }
+
+  // ---------- 유튜브 플레이어 ----------
+  window.onYouTubeIframeAPIReady = function () {
+    ytReady = true;
+    if (pendingLoad) { const p = pendingLoad; pendingLoad = null; loadVideo(p.id, p.opts); }
+  };
+  (function loadYT() {
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => setSync('유튜브 플레이어를 불러오지 못했어요', true);
+    document.head.appendChild(s);
+  })();
+
+  function safeTime() { try { return player.getCurrentTime() || 0; } catch (e) { return 0; } }
+  function videoTitle() { try { return (player && player.getVideoData && player.getVideoData().title) || ''; } catch (e) { return ''; } }
+  function videoAuthor() { try { return (player && player.getVideoData && player.getVideoData().author) || ''; } catch (e) { return ''; } }
+
+  function createPlayer(id, start) {
+    player = new YT.Player('player', {
+      videoId: id,
+      playerVars: { playsinline: 1, rel: 0, modestbranding: 1, start: Math.floor(start || 0), origin: location.origin },
+      events: {
+        onReady() {
+          st.ready = true;
+          applyRate();
+          updateRateAvailability();
+          if (start) player.seekTo(start, true);
+          st.duration = player.getDuration() || 0;
+          render();
+        },
+        onStateChange(e) {
+          const S = YT.PlayerState;
+          const wasPlaying = st.playing;
+          st.playing = e.data === S.PLAYING || e.data === S.BUFFERING;
+          if (e.data === S.PLAYING) { applyRate(); st.duration = player.getDuration() || st.duration; updateRateAvailability(); keepAwake(true); if (!st.song) render(); }
+          if (e.data === S.ENDED && st.loopOn && st.a != null) { jumpToLoopStart(); st.loops++; st.unsavedLoops++; player.playVideo(); }
+          if (wasPlaying && e.data === S.PAUSED) { keepAwake(false); schedule(1500); }
+          render();
+        },
+        onPlaybackRateChange(e) {
+          // 플레이어 자체 메뉴로 바꾼 경우에도 버튼 표시를 맞춘다
+          if (Math.abs(e.data - st.rate) > 0.001) { st.rate = e.data; markDirty(); render(); }
+        },
+        onError() { setSync('이 영상은 임베드 재생이 막혀 있어요. 유튜브에서 직접 열어야 해요.', true); },
+      },
+    });
+  }
+
+  function loadVideo(id, opts) {
+    opts = opts || {};
+    if (!ytReady) { pendingLoad = { id, opts }; st.videoId = id; render(); return; }
+    const start = opts.start || 0;
+    if (!player) createPlayer(id, start);
+    else player.cueVideoById({ videoId: id, startSeconds: start });
+    st.videoId = id;
+    st.duration = 0;
+    render();
+  }
+
+  function applyRate() {
+    if (!player || !st.ready) return;
+    try { if (Math.abs(player.getPlaybackRate() - st.rate) > 0.001) player.setPlaybackRate(st.rate); } catch (e) { /* 준비 전 */ }
+  }
+  function updateRateAvailability() {
+    let avail = null;
+    try { avail = player.getAvailablePlaybackRates(); } catch (e) { /* 준비 전 */ }
+    if (!avail || !avail.length) return;
+    rateBtns.forEach((b, i) => { b.disabled = !avail.some((r) => Math.abs(r - RATES[i]) < 0.001); });
+  }
+
+  // ---------- 동작 ----------
+  function setRate(r) {
+    st.rate = r;
+    applyRate();
+    markDirty();
+    render();
+  }
+
+  function setPoint(which, t) {
+    if (!st.ready) return;
+    const d = st.duration || Infinity;
+    const time = round1(Math.max(0, Math.min(t == null ? safeTime() : t, d)));
+    st[which] = time;
+    if (which === 'a' && st.b != null && st.b <= st.a) st.b = null;
+    if (which === 'b' && st.a != null && st.a >= st.b) st.a = null;
+    if (which === 'b' && st.a != null && st.b != null && t == null) { st.loopOn = true; st.loops = 0; }
+    if (st.a == null || st.b == null) st.loopOn = false;
+    markDirty();
+    render();
+  }
+  function nudge(which, d) { if (st[which] != null) setPoint(which, st[which] + d); }
+
+  function jumpToLoopStart() {
+    if (!player || !st.ready) return;
+    const to = st.a != null ? Math.max(0, st.a - st.lead) : 0;
+    st.seekGuardUntil = Date.now() + 400;
+    player.seekTo(to, true);
+  }
+
+  function toggleLoop() {
+    if (st.a == null || st.b == null) return;
+    st.loopOn = !st.loopOn;
+    st.loops = 0;
+    if (st.loopOn) {
+      const t = safeTime();
+      if (t < st.a - st.lead - 0.5 || t >= st.b) jumpToLoopStart();
+    }
+    render();
+  }
+
+  function clearLoop() { st.a = st.b = null; st.loopOn = false; st.loops = 0; markDirty(); render(); }
+
+  function togglePlay() {
+    if (!player || !st.ready) return;
+    if (st.playing) player.pauseVideo(); else player.playVideo();
+  }
+  function skip(d) { if (player && st.ready) { st.seekGuardUntil = Date.now() + 300; player.seekTo(Math.max(0, safeTime() + d), true); renderBar(); } }
+
+  // 구간 반복 감시 (50ms)
+  let lastBar = 0, lastTick = Date.now();
+  setInterval(() => {
+    const now = Date.now();
+    if (player && st.ready && st.playing) {
+      // 연습 시간 누적 (탭이 숨으면 브라우저가 타이머를 늦추므로 실제 경과 시간으로 계산, 한 번에 최대 2초)
+      st.unsavedSec += Math.min(2, (now - lastTick) / 1000);
+      if (st.loopOn && st.a != null && st.b != null && now > st.seekGuardUntil && safeTime() >= st.b) {
+        jumpToLoopStart();
+        st.loops++; st.unsavedLoops++;
+        render();
+      }
+      if (now - lastBar > 250) { lastBar = now; renderBar(); }
+    }
+    lastTick = now;
+  }, 50);
+
+  // ---------- 진행 바 ----------
+  let seeking = false;
+  const seekEl = $('seek');
+  seekEl.addEventListener('input', () => {
+    seeking = true;
+    const t = (Number(seekEl.value) / 1000) * (st.duration || 0);
+    $('tNow').textContent = fmt(t);
+    $('barFill').style.width = (Number(seekEl.value) / 10) + '%';
+  });
+  seekEl.addEventListener('change', () => {
+    const t = (Number(seekEl.value) / 1000) * (st.duration || 0);
+    if (player && st.ready) { st.seekGuardUntil = Date.now() + 400; player.seekTo(t, true); }
+    seeking = false;
+  });
+
+  // ---------- 저장 ----------
+  function markDirty() { st.dirty = true; schedule(4000); persistLocal(); }
+  let saveTimer = null;
+  function schedule(ms) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save('auto'), ms); }
+
+  function currentPos() {
+    if (st.a != null) return st.a;
+    return Math.max(0, Math.floor(safeTime()) - 2);
+  }
+  function resumeUrl(s) {
+    const q = new URLSearchParams({ v: s.videoId });
+    const t = s.pos != null ? s.pos : s.a;
+    if (t) q.set('t', String(Math.floor(t)));
+    if (s.a != null) q.set('a', String(s.a));
+    if (s.b != null) q.set('b', String(s.b));
+    if (s.rate && s.rate !== 1) q.set('r', String(s.rate));
+    return PLAYER_PATH + '?' + q.toString();
+  }
+  function snapshot() {
+    return { videoId: st.videoId, pos: st.ready ? currentPos() : st.startAt, a: st.a, b: st.b, rate: st.rate };
+  }
+  // 노션 연결이 없어도 이 기기와 주소창에는 남긴다
+  function persistLocal() {
+    if (!st.videoId) return;
+    const s = snapshot();
+    store.set('pp:v:' + st.videoId, s);
+    try { history.replaceState(null, '', resumeUrl(s)); } catch (e) { /* 무시 */ }
+  }
+
+  async function ensureSong() {
+    if (st.song) return st.song;
+    const r = await api.call('/song', { videoId: st.videoId, title: videoTitle(), artist: videoAuthor(), rate: st.rate });
+    st.song = r.song;
+    songsCache = null;
+    return st.song;
+  }
+
+  async function save(reason, opts) {
+    if (!st.videoId) return;
+    persistLocal();
+    if (!api.ok()) { if (reason === 'manual') { setSync('노션 연결 설정이 필요해요', true); openLib(true); } return; }
+    if (!st.song && reason !== 'manual') return; // 노션에 없는 곡은 '노션 추가'를 눌렀을 때만
+    if (st.saving) { st.savePending = true; return; }
+    const addSec = Math.floor(st.unsavedSec);
+    const addLoops = st.unsavedLoops;
+    if (reason === 'auto' && !st.dirty && addSec < 15) return;
+
+    st.saving = true;
+    setSync('저장 중…');
+    try {
+      const song = await ensureSong();
+      const s = snapshot();
+      const r = await api.call('/save', {
+        songId: song.id, videoId: s.videoId, pos: s.pos, a: s.a, b: s.b, rate: s.rate,
+        date: today(), title: song.title, addSeconds: addSec, addLoops,
+        resumeUrl: resumeUrl(s),
+      }, opts);
+      // keep: 아직 1분이 안 돼서 연습 기록을 만들지 않음 → 시간은 다음 저장에 다시 보냄
+      if (!r.keep) { st.unsavedSec -= addSec; st.unsavedLoops -= addLoops; }
+      st.dirty = false;
+      Object.assign(song, { a: s.a, b: s.b, rate: s.rate, pos: s.pos, lastDate: today() });
+      const d = new Date();
+      setSync('저장됨 ' + pad(d.getHours()) + ':' + pad(d.getMinutes()));
+    } catch (e) {
+      setSync(e.message || '저장 실패', true);
+    } finally {
+      st.saving = false;
+      render();
+      if (st.savePending) { st.savePending = false; save('auto'); }
+    }
+  }
+
+  setInterval(() => { if (st.playing) save('auto'); }, AUTOSAVE_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { save('auto', { keepalive: true }); keepAwake(false); }
+  });
+  window.addEventListener('pagehide', () => save('auto', { keepalive: true }));
+
+  // 연습 중 아이패드 화면 꺼짐 방지
+  let wakeLock = null;
+  async function keepAwake(on) {
+    try {
+      if (on && !wakeLock && 'wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+      if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch (e) { /* 지원 안 함 */ }
+  }
+
+  // ---------- 곡 열기 ----------
+  async function openSong(id, opts) {
+    opts = opts || {};
+    if (st.videoId && st.videoId !== id) await save('auto');
+    Object.assign(st, { song: null, a: null, b: null, loopOn: false, loops: 0, unsavedSec: 0, unsavedLoops: 0, dirty: false });
+    setSync('');
+
+    // 우선순위: 주소의 값 > 노션 > 이 기기 기록
+    const local = store.get('pp:v:' + id, null);
+    let src = opts.params || null;
+    let song = opts.song || null;
+    if (!song && api.ok()) {
+      setSync('노션 확인 중…');
+      try { song = (await api.call('/song?v=' + encodeURIComponent(id))).song; setSync(song ? '노션 기록 불러옴' : '노션에 없는 곡'); }
+      catch (e) { setSync(e.message, true); }
+    }
+    st.song = song;
+    const base = src || song || local || {};
+    st.a = base.a != null ? base.a : null;
+    st.b = base.b != null ? base.b : null;
+    st.rate = RATES.includes(base.rate) ? base.rate : 1;
+    st.loopOn = st.a != null && st.b != null && st.b > st.a;
+    let start = base.t != null ? base.t : (base.pos != null ? base.pos : 0);
+    if (st.loopOn && (start < st.a - 3 || start >= st.b)) start = Math.max(0, st.a - st.lead);
+    st.startAt = start;
+    loadVideo(id, { start });
+    applyRate();
+    persistLocal();
+    render();
+  }
+
+  // ---------- 곡 목록 ----------
+  let songsCache = null;
+  function renderSongs() {
+    const ul = $('songs');
+    if ($('lib').hidden) return;
+    ul.textContent = '';
+    const msg = (t) => { const li = document.createElement('li'); li.className = 'note'; li.textContent = t; ul.appendChild(li); };
+    if (!api.ok()) return msg('아래 노션 연결 설정을 하면 노션의 연습 곡이 여기 보여요.');
+    if (!songsCache) return msg('불러오는 중…');
+    if (songsCache.error) return msg(songsCache.error);
+    if (!songsCache.length) return msg('아직 곡이 없어요. 링크를 붙여넣어 열고 노션 추가를 누르세요.');
+    songsCache.forEach((s) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (s.videoId === st.videoId) b.setAttribute('aria-current', 'true');
+      const t = document.createElement('span'); t.className = 't'; t.textContent = s.title;
+      const m = document.createElement('span'); m.className = 'm';
+      const parts = [];
+      if (s.status) parts.push(s.status);
+      if (s.a != null && s.b != null) parts.push(fmt(s.a) + '–' + fmt(s.b));
+      if (s.rate) parts.push(s.rate + '×');
+      if (s.lastDate) parts.push(s.lastDate.slice(5).replace('-', '/'));
+      m.textContent = parts.join(' · ');
+      b.append(t, m);
+      b.addEventListener('click', () => { closeLib(); openSong(s.videoId, { song: s }); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  async function loadSongs() {
+    if (!api.ok()) { renderSongs(); return; }
+    songsCache = null; renderSongs();
+    try { songsCache = (await api.call('/songs')).songs || []; }
+    catch (e) { songsCache = []; songsCache.error = e.message; }
+    renderSongs();
+  }
+  function openLib(settings) {
+    $('lib').hidden = false; $('scrim').hidden = false; $('libBtn').setAttribute('aria-expanded', 'true');
+    if (settings) $('settings').open = true;
+    $('apiUrl').value = api.url(); $('apiKey').value = api.key();
+    loadSongs();
+  }
+  function closeLib() { $('lib').hidden = true; $('scrim').hidden = true; $('libBtn').setAttribute('aria-expanded', 'false'); }
+
+  $('apiSave').addEventListener('click', async () => {
+    store.set('pp-api', $('apiUrl').value.trim());
+    store.set('pp-key', $('apiKey').value.trim());
+    $('apiMsg').textContent = '확인 중…';
+    try { const r = await api.call('/health'); $('apiMsg').textContent = '✓ 연결됨 (' + r.songsTitle + ')'; loadSongs(); if (st.videoId && !st.song) openSong(st.videoId); }
+    catch (e) { $('apiMsg').textContent = e.message; }
+  });
+
+  // ---------- 이벤트 연결 ----------
+  function onUrl(input) {
+    return (e) => {
+      e.preventDefault();
+      const id = videoIdFrom($(input).value);
+      if (!id) { setSync('유튜브 링크를 읽지 못했어요', true); return; }
+      $(input).value = ''; closeLib();
+      openSong(id);
+    };
+  }
+  $('urlForm').addEventListener('submit', onUrl('urlInput'));
+  $('urlForm2').addEventListener('submit', onUrl('urlInput2'));
+  $('libBtn').addEventListener('click', () => ($('lib').hidden ? openLib() : closeLib()));
+  $('libClose').addEventListener('click', closeLib);
+  $('scrim').addEventListener('click', closeLib);
+  $('setA').addEventListener('click', () => setPoint('a'));
+  $('setB').addEventListener('click', () => setPoint('b'));
+  document.querySelectorAll('.pp-nudge').forEach((b) => b.addEventListener('click', () => nudge(b.dataset.pt, Number(b.dataset.d))));
+  $('loopBtn').addEventListener('click', toggleLoop);
+  $('clearBtn').addEventListener('click', clearLoop);
+  $('playBtn').addEventListener('click', togglePlay);
+  $('startBtn').addEventListener('click', jumpToLoopStart);
+  $('backBtn').addEventListener('click', () => skip(-5));
+  $('fwdBtn').addEventListener('click', () => skip(5));
+  $('saveBtn').addEventListener('click', () => save('manual'));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if (e.key === 'Escape') { closeLib(); return; }
+    const map = {
+      Space: togglePlay, Digit1: () => setRate(0.25), Digit2: () => setRate(0.5), Digit3: () => setRate(0.75), Digit4: () => setRate(1),
+      BracketLeft: () => setPoint('a'), BracketRight: () => setPoint('b'), KeyL: toggleLoop, KeyR: jumpToLoopStart,
+      ArrowLeft: () => skip(-5), ArrowRight: () => skip(5), KeyS: () => save('manual'),
+    };
+    const fn = map[e.code];
+    if (!fn) return;
+    e.preventDefault();
+    fn();
+  });
+
+  // ---------- 시작 ----------
+  const q = new URLSearchParams(location.search);
+  const startId = videoIdFrom(q.get('v') || '');
+  render();
+  if (startId) {
+    const params = (q.has('a') || q.has('b') || q.has('r') || q.has('t'))
+      ? { a: num(q.get('a')), b: num(q.get('b')), rate: num(q.get('r')) || 1, t: num(q.get('t')) }
+      : null;
+    openSong(startId, { params });
+  } else if (!api.ok()) {
+    setSync('');
+  }
+  window.__pp = { st, save, openSong }; // 디버그용
+})();

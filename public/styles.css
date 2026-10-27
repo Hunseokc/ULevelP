@@ -59,6 +59,7 @@ body {
 h1 { font-size: 21px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 .sub { color: var(--muted); margin: 2px 0 0; max-width: 68ch; }
 .head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.practice-link { text-decoration: none; margin-left: auto; font-size: 13px; padding: 6px 14px; border-radius: 999px; }
 .theme { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
 .theme button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted); padding: 5px 14px; border-radius: 999px; cursor: pointer; }
 .theme button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
