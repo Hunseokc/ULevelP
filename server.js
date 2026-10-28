@@ -158,7 +158,7 @@ function serveStatic(req, res, pathname) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'Not found', 'text/plain; charset=utf-8');
     const type = MIME[path.extname(file)] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': rel === '/index.html' ? 'no-cache' : 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': path.extname(file) === '.html' ? 'no-cache' : 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });

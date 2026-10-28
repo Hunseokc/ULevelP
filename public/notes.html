@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학습 노트 · ULeveLP</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<script>try { var t = localStorage.getItem('gv-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+<div class="page">
+  <nav class="site-nav" aria-label="사이트">
+    <a href="./">⌂ HOME</a>
+    <span class="links"><a href="notes.html" aria-current="page">NOTES</a><a href="settings.html">SETTING</a></span>
+  </nav>
+
+  <div>
+    <h1 class="page-title">Notes</h1>
+    <p class="page-sub">유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 노션 <b>학습 영상 노트</b>에 정리해요. 보통 1~3분 걸려요. <a id="notionLink" target="_blank" rel="noopener" hidden>노션에서 보기 ↗</a></p>
+  </div>
+
+  <form class="note-form" id="form">
+    <label class="field">
+      <span class="lab">유튜브 링크</span>
+      <input class="inp" id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+      <span class="preview" id="preview"><img alt=""><span class="hint">영상을 확인했어요</span></span>
+    </label>
+    <div class="field">
+      <span class="lab">태그</span>
+      <div class="tags" id="tags" role="group" aria-label="태그"></div>
+      <span class="hint">고른 태그에 맞춰 정리 항목이 달라져요. 여러 개 골라도 됩니다.</span>
+    </div>
+    <label class="field">
+      <span class="lab">메모 <span class="hint">(선택)</span></span>
+      <textarea class="inp" id="memo" placeholder="예: 3:20부터 나오는 보이싱 위주로"></textarea>
+    </label>
+    <div class="row">
+      <button class="cta" id="submit" type="submit">분석 요청</button>
+    </div>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+
+  <h2>최근 요청</h2>
+  <ul class="runs" id="runs"><li class="empty">SETTING에서 GitHub 토큰을 넣으면 기록이 보여요.</li></ul>
+</div>
+
+<script src="site.js"></script>
+<script>
+'use strict';
+(function () {
+  const TAGS = ['화성', '사운드 디자인', 'DAW/MIDI', '리듬', '편곡', '믹싱'];
+  const WORKFLOW = 'analyze.yml';
+  const $ = (id) => document.getElementById(id);
+  const { raw, videoIdFrom, thumb, esc, gh } = UL;
+
+  // ---------- 폼 ----------
+  const selected = new Set();
+  TAGS.forEach((t) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = t; b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      if (selected.has(t)) selected.delete(t); else selected.add(t);
+      b.setAttribute('aria-pressed', String(selected.has(t)));
+    });
+    $('tags').append(b);
+  });
+
+  function preview() {
+    const id = videoIdFrom($('url').value);
+    $('preview').classList.toggle('show', !!id);
+    if (id) $('preview').querySelector('img').src = thumb(id);
+  }
+  $('url').addEventListener('input', preview);
+
+  function say(text, cls) { $('msg').textContent = text; $('msg').className = 'msg' + (cls ? ' ' + cls : ''); }
+
+  let branch = '';
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = videoIdFrom($('url').value);
+    if (!id) return say('유튜브 영상 링크가 아니에요.', 'err');
+    if (!selected.size) return say('태그를 하나 이상 골라주세요.', 'err');
+    if (!gh.ok()) return say('SETTING에서 GitHub 토큰을 먼저 넣어주세요.', 'err');
+
+    $('submit').disabled = true; say('요청 보내는 중...');
+    try {
+      branch = branch || (await gh.call('')).default_branch;
+      await gh.call('/actions/workflows/' + WORKFLOW + '/dispatches', {
+        method: 'POST',
+        body: JSON.stringify({
+          ref: branch,
+          inputs: {
+            url: 'https://www.youtube.com/watch?v=' + id,
+            tags: TAGS.filter((t) => selected.has(t)).join(','),
+            memo: $('memo').value.trim(),
+          },
+        }),
+      });
+      say('요청했어요. 보통 1~3분 뒤에 노션에 정리돼요.', 'ok');
+      $('url').value = ''; $('memo').value = ''; preview();
+      watchUntil = Date.now() + 20000;
+      refresh();
+    } catch (err) {
+      say(err.message, 'err');
+    } finally {
+      $('submit').disabled = false;
+    }
+  });
+
+  // ---------- 최근 요청 ----------
+  let timer = null, watchUntil = 0;
+
+  function ago(iso) {
+    const s = (Date.now() - new Date(iso)) / 1000;
+    if (s < 60) return '방금';
+    if (s < 3600) return Math.floor(s / 60) + '분 전';
+    if (s < 86400) return Math.floor(s / 3600) + '시간 전';
+    return new Date(iso).toLocaleDateString('ko-KR');
+  }
+
+  function badge(run) {
+    if (run.status !== 'completed') return ['run', '분석 중'];
+    if (run.conclusion === 'success') return ['ok', '완료'];
+    if (run.conclusion === 'cancelled') return ['fail', '취소됨'];
+    return ['fail', '실패 · 로그 보기'];
+  }
+
+  async function refresh() {
+    clearTimeout(timer);
+    if (!gh.ok()) return;
+    try {
+      const runs = (await gh.call('/actions/workflows/' + WORKFLOW + '/runs?per_page=15')).workflow_runs;
+      $('runs').innerHTML = runs.length ? runs.map((r) => {
+        const [tags, url = ''] = r.display_title.split(' | ');
+        const id = videoIdFrom(url);
+        const [cls, label] = badge(r);
+        return '<li class="run">' +
+          (id ? '<a href="' + esc(url) + '" target="_blank" rel="noopener"><img src="' + thumb(id) + '" alt=""></a>' : '<span></span>') +
+          '<div><div class="t">' + esc(tags) + '</div><div class="sub">' + ago(r.created_at) + ' · ' + esc(url) + '</div></div>' +
+          '<div class="acts">' + (id ? '<a class="badge" href="practice.html?v=' + id + '">▶ 연습</a>' : '') +
+          '<a class="badge ' + cls + '" href="' + esc(r.html_url) + '" target="_blank" rel="noopener">' + label + '</a></div>' +
+          '</li>';
+      }).join('') : '<li class="empty">아직 요청이 없어요.</li>';
+      const active = runs.some((r) => r.status !== 'completed');
+      if (active || Date.now() < watchUntil) timer = setTimeout(refresh, 5000);
+    } catch (err) {
+      $('runs').innerHTML = '<li class="empty">' + esc(err.message) + '</li>';
+    }
+  }
+
+  // ---------- 시작 ----------
+  const notionUrl = raw.get('ul-notion-notes');
+  $('notionLink').hidden = !notionUrl;
+  if (notionUrl) $('notionLink').href = notionUrl;
+
+  // 첫 화면에서 '노트 만들기'로 왔을 때: notes.html?url=...
+  const q = new URLSearchParams(location.search);
+  if (q.get('url')) { $('url').value = q.get('url'); preview(); history.replaceState(null, '', location.pathname); }
+  if (!gh.ok()) say('SETTING에서 GitHub 토큰을 넣으면 분석을 요청할 수 있어요.');
+  refresh();
+})();
+</script>
+</body>
+</html>

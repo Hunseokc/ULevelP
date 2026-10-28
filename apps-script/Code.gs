@@ -7,7 +7,7 @@
 //   SONGS_DB, SESSIONS_DB (선택) 노션 데이터베이스 ID. 기본값은 아래
 //
 // 플레이어는 모든 요청을 text/plain POST 한 번으로 보냅니다 (Apps Script는 커스텀 헤더와 preflight를 못 받음).
-//   본문: { key, path: '/songs' | '/song' | '/save' | '/health', method: 'GET' | 'POST', query: {...}, body: {...} }
+//   본문: { key, path: '/songs' | '/song' | '/save' | '/record' | '/health', method: 'GET' | 'POST', query: {...}, body: {...} }
 //   응답은 항상 200이고, 실패하면 { error } 가 들어 있습니다.
 
 const NOTION_VERSION = '2022-06-28';
@@ -22,6 +22,7 @@ const P = {
 };
 const S = {
   title: '기록', song: '곡', date: '날짜', minutes: '연습 시간(분)', segment: '구간', rate: '속도', loops: '반복 횟수',
+  recording: '녹음',
 };
 
 function doPost(e) {
@@ -63,6 +64,7 @@ function handle(req) {
         if (req.method === 'GET') return { song: findSong(ctx, query.v) };
         return { song: createSong(ctx, body) };
       case '/save': return save(ctx, body);
+      case '/record': return record(ctx, body);
       default: return { error: '없는 경로' };
     }
   } catch (err) {
@@ -78,27 +80,48 @@ function safeEqual(a, b) {
 }
 
 function makeCtx(env) {
-  function notion(path, method, body) {
-    const res = UrlFetchApp.fetch('https://api.notion.com/v1' + path, {
-      method: (method || 'GET').toLowerCase(),
+  function call(path, opts) {
+    const res = UrlFetchApp.fetch('https://api.notion.com/v1' + path, Object.assign({
       headers: { Authorization: 'Bearer ' + env.token, 'Notion-Version': NOTION_VERSION },
-      contentType: 'application/json',
-      payload: body ? JSON.stringify(body) : undefined,
       muteHttpExceptions: true,
-    });
+    }, opts));
     const status = res.getResponseCode();
     let data = {};
     try { data = JSON.parse(res.getContentText()); } catch (err) { /* 빈 응답 */ }
     if (status >= 400) throw new Error(friendly(status, data));
     return data;
   }
-  return { songsDb: env.songsDb, sessionsDb: env.sessionsDb, notion };
+  function notion(path, method, body) {
+    return call(path, {
+      method: (method || 'GET').toLowerCase(),
+      contentType: 'application/json',
+      payload: body ? JSON.stringify(body) : undefined,
+    });
+  }
+  // 노션 파일 업로드. 20MB까지는 한 번에, 넘으면 10MB씩 나눠 보냄
+  // payload에 Blob을 넣으면 UrlFetchApp이 multipart/form-data로 만들어 줌
+  function upload(bytes, mime, name) {
+    const PART = 10 * 1024 * 1024;
+    const parts = bytes.length > 20 * 1024 * 1024 ? Math.ceil(bytes.length / PART) : 1;
+    const req = { filename: name, content_type: mime };
+    if (parts > 1) { req.mode = 'multi_part'; req.number_of_parts = parts; }
+    const fu = notion('/file_uploads', 'POST', req);
+    for (let i = 0; i < parts; i++) {
+      const form = { file: Utilities.newBlob(parts > 1 ? bytes.slice(i * PART, (i + 1) * PART) : bytes, mime, name) };
+      if (parts > 1) form.part_number = String(i + 1);
+      call('/file_uploads/' + fu.id + '/send', { method: 'post', payload: form });
+    }
+    if (parts > 1) notion('/file_uploads/' + fu.id + '/complete', 'POST', {});
+    return fu.id;
+  }
+  return { songsDb: env.songsDb, sessionsDb: env.sessionsDb, notion, upload };
 }
 
 function friendly(status, data) {
   if (status === 401) return '노션 토큰이 올바르지 않아요 (스크립트 속성 NOTION_TOKEN 확인)';
   if (status === 404) return '노션 데이터베이스를 못 찾았어요. 악기 연습 페이지에 통합을 연결했는지 확인하세요';
   if (status === 429) return '노션 요청이 많아요. 잠시 후 다시 저장됩니다';
+  if (status === 413) return '녹음 파일이 너무 커요';
   return '노션 오류: ' + (data.message || status);
 }
 
@@ -141,7 +164,13 @@ function health(ctx) {
   const missing = Object.values(P).filter((k) => !has(songs, k))
     .concat(Object.values(S).filter((k) => !has(sessions, k)));
   if (missing.length) throw new Error('노션에 없는 속성: ' + missing.join(', '));
-  return { ok: true, songsTitle: plain(songs.title), sessionsTitle: plain(sessions.title) };
+  let maxUploadMB = null;
+  try {
+    const me = ctx.notion('/users/me');
+    const lim = me.bot && me.bot.workspace_limits && me.bot.workspace_limits.max_file_upload_size_in_bytes;
+    if (lim) maxUploadMB = Math.round(lim / 1024 / 1024);
+  } catch (err) { /* 몰라도 됨 */ }
+  return { ok: true, songsTitle: plain(songs.title), sessionsTitle: plain(sessions.title), maxUploadMB };
 }
 
 function listSongs(ctx) {
@@ -208,9 +237,37 @@ function createSong(ctx, b) {
   return readSong(page);
 }
 
+const dayOf = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd'));
+const segmentOf = (b) => (b.a != null && b.b != null ? mmss(b.a) + '–' + mmss(b.b) : '');
+
+// 같은 곡·같은 날 기록을 동시에 두 번 만들지 않도록 잠금
+function withLock(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
+function findSession(ctx, songId, date) {
+  const found = ctx.notion('/databases/' + ctx.sessionsDb + '/query', 'POST', {
+    filter: { and: [{ property: S.song, relation: { contains: songId } }, { property: S.date, date: { equals: date } }] },
+    page_size: 1,
+  });
+  return found.results[0] || null;
+}
+
+function createSession(ctx, b, date, seconds, loops) {
+  const props = {};
+  props[S.title] = { title: txt((date + ' ' + (b.title || '')).trim()) };
+  props[S.song] = { relation: [{ id: b.songId }] };
+  props[S.date] = { date: { start: date } };
+  props[S.minutes] = num(seconds / 60); props[S.loops] = num(loops); props[S.rate] = num(b.rate);
+  props[S.segment] = { rich_text: txt(segmentOf(b)) };
+  return ctx.notion('/pages', 'POST', { parent: { database_id: ctx.sessionsDb }, properties: props });
+}
+
 function save(ctx, b) {
   if (!b.songId || !validId(b.videoId)) throw new Error('곡 정보가 없어요');
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date || '') ? b.date : Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd');
+  const date = dayOf(b.date);
   const resume = typeof b.resumeUrl === 'string' && /^https:\/\//.test(b.resumeUrl) ? b.resumeUrl : null;
 
   const songProps = {};
@@ -224,16 +281,9 @@ function save(ctx, b) {
   const addLoops = Math.max(0, Math.min(Number(b.addLoops) || 0, 100000));
   if (!addSec && !addLoops) return { ok: true };
 
-  // 같은 곡·같은 날 기록을 동시에 두 번 만들지 않도록 잠금
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const found = ctx.notion('/databases/' + ctx.sessionsDb + '/query', 'POST', {
-      filter: { and: [{ property: S.song, relation: { contains: b.songId } }, { property: S.date, date: { equals: date } }] },
-      page_size: 1,
-    });
-    const segment = b.a != null && b.b != null ? mmss(b.a) + '–' + mmss(b.b) : '';
-    const cur = found.results[0];
+  return withLock(() => {
+    const segment = segmentOf(b);
+    const cur = findSession(ctx, b.songId, date);
     if (cur) {
       const p = cur.properties;
       const mins = (prop(p, S.minutes, 'number') || 0) + addSec / 60;
@@ -246,17 +296,59 @@ function save(ctx, b) {
     }
     // 1분 미만이면 아직 기록을 만들지 않음 (플레이어가 남은 시간을 다음 저장에 다시 보냄)
     if (addSec < 60) return { ok: true, pendingSeconds: addSec, keep: true };
-    const props = {};
-    props[S.title] = { title: txt((date + ' ' + (b.title || '')).trim()) };
-    props[S.song] = { relation: [{ id: b.songId }] };
-    props[S.date] = { date: { start: date } };
-    props[S.minutes] = num(addSec / 60); props[S.loops] = num(addLoops); props[S.rate] = num(b.rate);
-    props[S.segment] = { rich_text: txt(segment) };
-    const page = ctx.notion('/pages', 'POST', { parent: { database_id: ctx.sessionsDb }, properties: props });
+    const page = createSession(ctx, b, date, addSec, addLoops);
     return { ok: true, sessionId: page.id, minutes: addSec / 60 };
-  } finally {
-    lock.releaseLock();
-  }
+  });
+}
+
+// 녹음: 그날 연습 기록 페이지 본문에 설명 한 줄 + 오디오 블록, 녹음 속성에도 같은 파일 추가
+const AUDIO = { 'audio/mp4': 'm4a', 'audio/webm': 'weba', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/aac': 'aac' };
+
+function record(ctx, b) {
+  if (!b.songId || !validId(b.videoId)) throw new Error('곡 정보가 없어요');
+  if (!b.data) throw new Error('녹음 데이터가 없어요');
+  const mime = String(b.mime || '').split(';')[0].trim().toLowerCase();
+  if (!AUDIO[mime]) throw new Error('지원하지 않는 녹음 형식: ' + (b.mime || '없음'));
+  const bytes = Utilities.base64Decode(b.data);
+  if (!bytes.length) throw new Error('녹음 데이터가 비어 있어요');
+
+  const date = dayOf(b.date);
+  const time = /^\d{2}:\d{2}$/.test(b.time || '') ? b.time : Utilities.formatDate(new Date(), TIME_ZONE, 'HH:mm');
+  const safeTitle = String(b.title || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60);
+  const name = (date + ' ' + time.replace(':', '') + ' ' + safeTitle).trim() + '.' + AUDIO[mime];
+  const fileId = ctx.upload(bytes, mime, name);
+
+  const caption = ['🎙 ' + time];
+  const segment = segmentOf(b);
+  if (segment) caption.push(segment);
+  if (b.rate) caption.push(b.rate + '×');
+  if (b.seconds) caption.push(mmss(b.seconds));
+
+  return withLock(() => {
+    const session = findSession(ctx, b.songId, date) || createSession(ctx, b, date, 0, 0);
+    ctx.notion('/blocks/' + session.id + '/children', 'PATCH', {
+      children: [
+        { type: 'paragraph', paragraph: { rich_text: txt(caption.join(' · ')) } },
+        { type: 'audio', audio: { type: 'file_upload', file_upload: { id: fileId } } },
+      ],
+    });
+    // 파일 속성은 통째로 바뀌므로 기존 파일을 다시 넣어서 보냄. 실패해도 본문 녹음은 남음
+    let warning = null;
+    try {
+      const page = ctx.notion('/pages/' + session.id);
+      const cur = (page.properties[S.recording] && page.properties[S.recording].files) || [];
+      const files = cur.map((f) => (f.type === 'external'
+        ? { name: f.name, type: 'external', external: { url: f.external.url } }
+        : { name: f.name, type: 'file', file: { url: f.file.url } }));
+      files.push({ name, type: 'file_upload', file_upload: { id: fileId } });
+      const upd = {};
+      upd[S.recording] = { files };
+      ctx.notion('/pages/' + session.id, 'PATCH', { properties: upd });
+    } catch (err) {
+      warning = '녹음 속성에는 못 넣었어요 (' + err.message + ')';
+    }
+    return { ok: true, sessionId: session.id, url: session.url, name, warning };
+  });
 }
 
 function mmss(s) {

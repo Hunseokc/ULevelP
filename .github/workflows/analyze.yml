@@ -1,0 +1,45 @@
+name: analyze
+run-name: "${{ inputs.tags }} | ${{ inputs.url }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 유튜브 영상 주소
+        required: true
+        type: string
+      tags:
+        description: 쉼표로 구분한 태그 (화성, 사운드 디자인, DAW/MIDI, 리듬, 편곡, 믹싱)
+        required: true
+        type: string
+      memo:
+        description: 특히 볼 부분 (선택)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 시크릿은 저장소 Secrets (Settings → Secrets and variables → Actions)의 GEMINI_API_KEY, NOTION_TOKEN
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python scripts/analyze.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          FRAME_FPS: ${{ vars.FRAME_FPS }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          # 학습 영상 노트 데이터베이스. 다른 DB를 쓰려면 Variables에 NOTION_NOTES_DB를 넣으면 됨
+          NOTION_DATABASE_ID: ${{ vars.NOTION_NOTES_DB || 'd708a561eb574175a8bb979642b3a76a' }}
+          INPUT_URL: ${{ inputs.url }}
+          INPUT_TAGS: ${{ inputs.tags }}
+          INPUT_MEMO: ${{ inputs.memo }}

@@ -1,0 +1,103 @@
+/* 사이트 공통: 상단 메뉴, 첫 화면, 학습 노트, 설정. 색·형태 규칙은 styles.css 토큰과 DESIGN.md를 따름 */
+a { color: var(--link); }
+
+/* 상단 메뉴: 모든 페이지 같은 자리 */
+.site-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; font-family: var(--font-display); font-weight: 800; font-size: 14px; letter-spacing: .02em; }
+.site-nav a { color: var(--ink); text-decoration: none; padding: 8px 2px; }
+.site-nav a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.site-nav a[aria-current="page"] { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.site-nav .links { display: flex; gap: 20px; }
+
+/* 페이지 머리말 (노트·설정) */
+.page { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.page-title { font-family: var(--font-display); font-weight: 900; font-stretch: 112%; font-size: clamp(36px, 7vw, 56px); line-height: 1; letter-spacing: -0.02em; margin: 12px 0 0; text-transform: uppercase; }
+.page-sub { margin: 0; color: var(--muted); max-width: 60ch; }
+.page h2 { font-size: 13px; letter-spacing: .04em; color: var(--muted); margin: 8px 0 0; font-weight: 700; }
+
+/* 입력 칸과 버튼: 필 */
+.inp { font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 9999px; padding: 0 22px; min-height: 52px; width: 100%; min-width: 0; }
+.inp:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+textarea.inp { border-radius: 0; padding: 14px 18px; min-height: 88px; resize: vertical; }
+.cta, .sec { font: inherit; font-weight: 700; font-size: 17px; min-height: 52px; padding: 0 30px; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; white-space: nowrap; }
+.cta { background: var(--ink); color: var(--bg); border: 1px solid var(--ink); }
+.sec { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+.cta:disabled, .sec:disabled { opacity: .4; cursor: default; }
+.msg { font-size: 13px; color: var(--muted); min-height: 20px; margin: 0; }
+.msg.err { color: var(--bad); }
+.msg.ok { color: var(--good); }
+
+/* ---------- 첫 화면 ---------- */
+body.home { padding-top: 12px; }
+.home-wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; }
+.wordmark { font-family: var(--font-display); font-weight: 900; font-stretch: 125%; font-size: clamp(56px, 13vw, 132px); line-height: .95; letter-spacing: -0.035em; text-align: center; margin: 36px 0 28px; }
+.home-rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+.tagline { font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: .06em; text-align: center; margin: 28px 0 16px; }
+
+.go { width: min(640px, 100%); margin: 0 auto 28px; display: flex; flex-direction: column; gap: 12px; }
+.go-pick { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.go-pick[hidden] { display: none; }
+.go-pick img { width: 112px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 0; background: var(--surface2); }
+.go-pick .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.frames { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); }
+.frame { padding: 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 360px; }
+.frame + .frame { border-left: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .frames { grid-template-columns: 1fr; }
+  .frame { min-height: 0; }
+  .frame + .frame { border-left: 0; border-top: 1px solid var(--line); }
+}
+.frame-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.frame-head h2 { font-family: var(--font-display); font-weight: 900; font-stretch: 115%; font-size: 30px; line-height: 1; margin: 0; letter-spacing: -0.02em; }
+.frame-head span { font-size: 13px; color: var(--muted); }
+.frame-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.frame-list li { border-bottom: 1px solid var(--line); }
+.frame-list a { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 2px; color: var(--ink); text-decoration: none; min-height: 48px; }
+.frame-list a:hover .t { text-decoration: underline; text-underline-offset: 3px; }
+.frame-list .t { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame-list .m { font-size: 12px; color: var(--muted); font-family: var(--font-mono); white-space: nowrap; }
+.frame-list .cur .m { color: var(--ink); font-weight: 700; }
+.frame-list .note { padding: 12px 2px; color: var(--muted); font-size: 13px; }
+.frame-list .note a { display: inline; padding: 0; min-height: 0; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.frame .more { margin-top: auto; align-self: flex-start; }
+
+.notion-big { display: block; text-align: center; font-family: var(--font-display); font-weight: 900; font-stretch: 125%; font-size: clamp(48px, 10vw, 96px); line-height: 1; letter-spacing: -0.03em; color: var(--ink); text-decoration: none; margin: 48px 0 8px; }
+.notion-big:hover { text-decoration: underline; text-decoration-thickness: 4px; text-underline-offset: 8px; }
+.notion-links { display: flex; justify-content: center; gap: 20px; font-size: 13px; margin-bottom: 40px; }
+.notion-links[hidden] { display: none; }
+.home-foot { display: flex; justify-content: space-between; font-family: var(--font-display); font-weight: 800; font-size: 17px; padding: 16px 0 8px; border-top: 1px solid var(--line); }
+
+/* ---------- 학습 노트 ---------- */
+.note-form { display: flex; flex-direction: column; gap: 18px; background: var(--surface); border: 1px solid var(--line); padding: 24px; }
+.note-form .field > .lab { font-size: 13px; font-weight: 700; color: var(--ink); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.preview { display: none; align-items: center; gap: 12px; margin-top: 6px; }
+.preview.show { display: flex; }
+.preview img { width: 120px; aspect-ratio: 16 / 9; object-fit: cover; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.tags button { font: inherit; font-size: 15px; min-height: 44px; padding: 0 20px; border-radius: 9999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.tags button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 700; }
+.runs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.runs li { border-bottom: 1px solid var(--line); }
+.run { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; }
+.run img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
+.run .t { font-weight: 700; }
+.run .sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run .acts { display: flex; gap: 6px; align-items: center; }
+.badge { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 9999px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; white-space: nowrap; }
+.badge.ok { border-color: var(--ink); }
+.badge.fail { color: var(--bad); border-color: var(--bad); }
+.runs .empty { border: 0; padding: 16px 0; text-align: left; }
+@media (max-width: 560px) { .run { grid-template-columns: 72px minmax(0, 1fr); } .run img { width: 72px; } .run .acts { grid-column: 1 / -1; } }
+
+/* ---------- 설정 ---------- */
+.set-sec { background: var(--surface); border: 1px solid var(--line); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.set-sec h2 { font-family: var(--font-display); font-weight: 900; font-size: 22px; letter-spacing: -0.01em; color: var(--ink); margin: 0; }
+.set-sec p, .set-sec ol { margin: 0; color: var(--muted); font-size: 14px; }
+.set-sec ol { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.set-sec b { color: var(--ink); }
+.set-sec .field > .lab { font-size: 13px; font-weight: 700; color: var(--ink); }
+.set-sec .row { gap: 12px; }
+.seg-pill { display: inline-flex; border: 1px solid var(--line); border-radius: 9999px; padding: 4px; gap: 4px; align-self: flex-start; }
+.seg-pill button { font: inherit; font-size: 15px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: transparent; color: var(--muted); cursor: pointer; }
+.seg-pill button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
