@@ -68,6 +68,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
+      # Pages는 모든 파일에 max-age=600을 걸어서, 노션 임베드·아이패드 웹뷰가 새 HTML에 옛 CSS·JS를 섞어 씀.
+      # 배포마다 로컬 CSS·JS 주소에 커밋 버전을 붙여 HTML이 바뀌면 CSS·JS도 새로 받게 함
+      - name: Version asset URLs
+        run: |
+          v="${GITHUB_SHA::7}"
+          sed -i -E "s#(href|src)=\"([a-z0-9/_-]+\.(css|js))\"#\1=\"\2?v=$v\"#g" public/*.html
+          grep -c "?v=$v" public/*.html
       # 화면은 브라우저에서 모든 계산을 하므로 public/ 만 올립니다 (/api 는 Pages 에서 제공되지 않음)
       - uses: actions/upload-pages-artifact@v4
         with:
