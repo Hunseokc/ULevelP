@@ -12,6 +12,8 @@
 
 디자인 규칙(색, 곡률)은 [DESIGN.md](DESIGN.md) 요약을 따릅니다. 색은 `public/styles.css`의 토큰에 모여 있습니다.
 
+로그인 서비스(Supabase)로 바꾸는 다음 단계의 기획·요구사항·설계·DB 모델은 [docs/](docs/README.md)에 있습니다.
+
 ## 실행
 
 ### Docker (권장)
