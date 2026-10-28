@@ -51,7 +51,7 @@ npm test         # 엔진·API 테스트
 - 키보드: Space 재생, 1~4 속도, `[` `]` A·B, L 반복, R 구간 처음, ←/→ 5초
 - 홈 화면에 추가하면 앱처럼 열리고, 재생 중에는 화면이 꺼지지 않음
 
-노션 저장은 `worker/`의 중계 서버가 있어야 합니다. 설정 방법은 [worker/README.md](worker/README.md). 중계 서버가 없어도 플레이어는 동작하고, 상태는 그 기기와 주소에 남습니다.
+노션 저장은 `apps-script/`의 중계 서버(Google Apps Script 웹 앱)가 있어야 합니다. 설정 방법은 [apps-script/README.md](apps-script/README.md). 중계 서버가 없어도 플레이어는 동작하고, 상태는 그 기기와 주소에 남습니다.
 
 오른쪽 위 라이트/다크 버튼으로 화면 모드를 바꿀 수 있습니다(고르기 전엔 시스템 설정을 따름).
 
@@ -66,10 +66,10 @@ public/
   styles.css
   app.js               화면 동작, 오디오, 재생 타이머
   practice.html/.css/.js  유튜브 연습 플레이어
-worker/notion-proxy.js 노션 중계 서버 (Cloudflare Worker)
   lib/voicing.js       보이싱 생성, 2-5-1 탐색, 탑노트 고정 도미넌트
   lib/theory.js        드롭 매트릭스, 2-note-per-string, 재해석, 5도권, 스케일
 test/engine.test.js    node:test 테스트
+apps-script/Code.gs    노션 중계 서버 (Google Apps Script)
 ```
 
 `public/lib/*.js`는 브라우저와 서버가 같은 파일을 씁니다. 계산 규칙을 바꾸면 화면과 API에 함께 반영됩니다.

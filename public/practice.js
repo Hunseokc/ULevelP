@@ -42,21 +42,26 @@
   };
   let player = null, ytReady = false, pendingLoad = null;
 
-  // ---------- 중계 서버(API) ----------
+  // ---------- 중계 서버(API, Apps Script 웹 앱) ----------
+  // Apps Script는 커스텀 헤더·preflight를 못 받아서 모든 요청을 text/plain POST 하나로 보낸다
   const api = {
-    url() { return (store.get('pp-api', '') || '').replace(/\/+$/, ''); },
+    url() { return (store.get('pp-api', '') || '').trim(); },
     key() { return store.get('pp-key', ''); },
     ok() { return !!(this.url() && this.key()); },
     async call(path, body, opts) {
       if (!this.ok()) throw new Error('노션 연결 설정이 필요해요');
-      const res = await fetch(this.url() + path, {
-        method: body ? 'POST' : 'GET',
-        headers: Object.assign({ 'X-Practice-Key': this.key() }, body ? { 'Content-Type': 'application/json' } : {}),
-        body: body ? JSON.stringify(body) : undefined,
+      const [route, qs] = path.split('?');
+      const res = await fetch(this.url(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          key: this.key(), path: route, method: body ? 'POST' : 'GET',
+          query: Object.fromEntries(new URLSearchParams(qs || '')), body: body || {},
+        }),
         keepalive: !!(opts && opts.keepalive),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || '서버 오류 (' + res.status + ')');
+      const data = await res.json().catch(() => ({ error: '서버 응답을 읽지 못했어요 (' + res.status + ')' }));
+      if (data.error) throw new Error(data.error);
       return data;
     },
   };
