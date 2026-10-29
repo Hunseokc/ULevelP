@@ -111,7 +111,7 @@
       h += '<line class="' + (f === 0 ? 'nut' : 'fret') + '" x1="' + x + '" x2="' + x + '" y1="' + (T - 6) + '" y2="' + (T + GAP * 5 + 6) + '"/>';
     }
     for (let s = 0; s < 6; s++) {
-      h += '<line class="str" style="stroke-width:' + (0.7 + (5 - s) * 0.0 + s * 0 + (6 - s) * 0.22) + '" x1="' + (showOpen ? L : xL) + '" x2="' + (width - 10) + '" y1="' + yOf(s) + '" y2="' + yOf(s) + '"/>';
+      h += '<line class="str" stroke-width="' + (0.7 + (5 - s) * 0.0 + s * 0 + (6 - s) * 0.22) + '" x1="' + (showOpen ? L : xL) + '" x2="' + (width - 10) + '" y1="' + yOf(s) + '" y2="' + yOf(s) + '"/>';
       h += '<text class="slab" x="10" y="' + yOf(s) + '">' + (6 - s) + '</text>';
     }
     for (let f = first; f <= to; f++) h += '<text class="flab" x="' + xOf(f) + '" y="' + (T + GAP * 5 + 20) + '">' + f + '</text>';
@@ -152,7 +152,7 @@
       h += '<line class="' + (f === 0 ? 'nut' : 'fret') + '" x1="' + x + '" x2="' + x + '" y1="' + (T - 8) + '" y2="' + (T + GAP * (n - 1) + 8) + '"/>';
     }
     for (let s = 0; s < n; s++) {
-      h += '<line class="str" style="stroke-width:' + (2.4 - s * 1.5 / Math.max(1, n - 1)).toFixed(2) + '" x1="' + fx(showOpen ? L : xL) + '" x2="' + fx(VW - R) + '" y1="' + yOf(s) + '" y2="' + yOf(s) + '"/>';
+      h += '<line class="str" stroke-width="' + (2.4 - s * 1.5 / Math.max(1, n - 1)).toFixed(2) + '" x1="' + fx(showOpen ? L : xL) + '" x2="' + fx(VW - R) + '" y1="' + yOf(s) + '" y2="' + yOf(s) + '"/>';
       h += '<text class="slab" x="' + fx(12) + '" y="' + yOf(s) + '">' + NOTE[CT.pc(open[s])].replace(/b$/, '♭') + '</text>';
     }
     if (o.block) {
