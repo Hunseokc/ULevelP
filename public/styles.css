@@ -5,7 +5,7 @@ img, svg { max-width: none; }
 /* 색: DESIGN.md (웜 뉴트럴 바탕, 모노톤 강조, 파랑은 근음·링크 같은 작은 면적, 주황은 지금 칠 음에만) */
 /* 형태: 버튼·탭·토글은 필(9999px), 카드·패널은 직각(0) */
 :root {
-  --bg: #ecece4;
+  --bg: #F0EEEA;
   --surface: #f6f6f1;
   --surface2: #e1e0d6;
   --ink: #1d1d1f;
