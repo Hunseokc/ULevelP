@@ -130,6 +130,8 @@ ULevelP와 guitar-practice는 같은 Origin이라 localStorage를 같이 씁니�
 | `gv-theme` | `ulp:theme` | 화면 모드 | X1 (inline 테마 스크립트를 `.js`로 옮길 때). 처음 한 번 `gv-theme` 값을 복사(비밀 아님) |
 | `gv-tab` | `ulp:tab` | 코드 연습실 마지막 탭 | X1 (같은 방식으로 복사) |
 | `pp-lead` | `ulp:lead` | 플레이어 리드인 설정 | X1 (같은 방식으로 복사) |
+| `ul-notion-practice`, `ul-notion-notes` | `ulp:notion-practice`, `ulp:notion-notes` | 노션 바로가기 링크(첫 화면·NOTES) | X1 (같은 방식으로 복사. R2 표에서 빠져 있던 것) |
+| (새로) | `ulp:copied` | 위 옛 키 복사를 마쳤다는 표시(`theme.js`). 화면 모드 "시스템"은 키를 지우므로, 이 표시가 없으면 다음에 옛 값이 다시 복사됨 | X1 |
 | `pp:v:<영상ID>` | `ulp:v:<영상ID>` | 비로그인 기기 기록(위치·구간·속도) | P1-2. 옛 `pp:v:*`는 지우지 않음(guitar-practice가 씀). P1-4에서 따로 묻고 가져옴 |
 | (새로) | `ulp:keys` | 키 등록 캐시(D14, [6.4](#64-노션-실시간-연동)) | P4-1 |
 | `pp-api`, `pp-key` | (없앰) | Apps Script 주소·공유 비밀 | P4-5에서 ULevelP 코드가 안 읽게 됨. 값 자체는 guitar-practice G8이 지움 |
