@@ -1,6 +1,6 @@
 # ULeveLP
 
-코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에 모은 웹 앱입니다. GitHub Pages(`https://hunseokc.github.io/guitar-practice/`)로 배포되고, 로컬에서는 Node.js 기본 모듈만 쓰는 작은 서버가 화면과 계산 API를 함께 제공합니다. 외부 npm 패키지는 없습니다.
+코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에 모은 웹 앱입니다. GitHub Pages(`https://hunseokc.github.io/ULevelP/`)로 배포되고, 로컬에서는 Node.js 기본 모듈만 쓰는 작은 서버가 화면과 계산 API를 함께 제공합니다. 외부 npm 패키지는 없습니다.
 
 | 페이지 | 하는 일 |
 | --- | --- |

@@ -409,7 +409,7 @@ ULeveLP 템플릿 (페이지)
 | 아티스트 | 텍스트 | `artist` | |
 | 상태 | 선택 (연습 중·보류·완료) | `status` | 연습 중↔`practicing`, 보류↔`paused`, 완료↔`done` |
 | 유튜브 링크 | URL | `video_id` | 내보낼 때 `https://www.youtube.com/watch?v={video_id}`. 가져올 때 `youtu.be/`, `?v=`, `/shorts/`, `/embed/`, `/live/` 형식에서 11자리 ID 추출 |
-| 이어서 연습 | URL | (계산) | `https://hunseokc.github.io/guitar-practice/practice.html?v=…&t=…&a=…&b=…&r=…` (FR-SONG-6). 가져올 때 `유튜브 링크`가 비어 있으면 여기서 영상 ID 추출 |
+| 이어서 연습 | URL | (계산) | `https://hunseokc.github.io/ULevelP/practice.html?v=…&t=…&a=…&b=…&r=…` (FR-SONG-6). 가져올 때 `유튜브 링크`가 비어 있으면 여기서 영상 ID 추출 |
 | 마지막 위치(초) | 숫자 | `pos` | |
 | 구간 시작(초) | 숫자 | `a` | |
 | 구간 끝(초) | 숫자 | `b` | |

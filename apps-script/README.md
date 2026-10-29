@@ -34,7 +34,7 @@
 한 번에 넣는 주소도 있습니다. 아래를 그 기기 브라우저에서 한 번 열면 저장되고 주소창에서는 지워집니다. 노션 임베드 주소로는 쓰지 마세요(노션 블록에 키가 그대로 남습니다).
 
 ```
-https://hunseokc.github.io/guitar-practice/practice.html#api=웹앱URL&k=비밀키
+https://hunseokc.github.io/ULevelP/practice.html#api=웹앱URL&k=비밀키
 ```
 
 ## 노션에서 바로 연습 열기
@@ -42,7 +42,7 @@ https://hunseokc.github.io/guitar-practice/practice.html#api=웹앱URL&k=비밀�
 곡 데이터베이스에 수식 속성(예: `연습하기`)을 추가하면 곡마다 플레이어 링크가 생깁니다. 곡을 추가할 때 `유튜브 링크`만 붙여넣으면 됩니다.
 
 ```
-link("▶ 연습", "https://hunseokc.github.io/guitar-practice/practice.html?v=" +
+link("▶ 연습", "https://hunseokc.github.io/ULevelP/practice.html?v=" +
   replace(prop("유튜브 링크"), ".*(v=|youtu[.]be/|shorts/|embed/|live/)([-_0-9A-Za-z]{11}).*", "$2"))
 ```
 

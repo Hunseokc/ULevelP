@@ -66,7 +66,7 @@
 ## 3. 인증
 
 - `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 지금 페이지 주소 } })`. PKCE 흐름(supabase-js 기본).
-- Supabase 대시보드 Auth → URL Configuration: Site URL = `https://hunseokc.github.io/guitar-practice/`, Redirect URLs = `https://hunseokc.github.io/guitar-practice/**`, `http://localhost:3000/**`.
+- Supabase 대시보드 Auth → URL Configuration: Site URL = `https://hunseokc.github.io/ULevelP/`, Redirect URLs = `https://hunseokc.github.io/ULevelP/**`, `http://localhost:3000/**`, `https://hunseokc.github.io/guitar-practice/**`(D18: guitar-practice도 같은 프로젝트로 로그인).
 - 세션은 supabase-js 기본(localStorage)에 둡니다.
 - 상단 메뉴 오른쪽 끝에 계정 표시(FR-AUTH-5). 누르면 SETTING의 계정 칸으로.
 - **첫 로그인 후 기기 기록 옮기기 (FR-LOCAL-2):** 로그인 직후 `profiles.migrated_local_at`이 비어 있고 localStorage에 `pp:v:*` 키가 있으면 확인 창. 확인하면 키마다 `songs.create` + `save_song_progress`(시간 기록은 없음), 끝나면 `migrated_local_at = now()`. 취소해도 `migrated_local_at`을 채워 다시 묻지 않음.
@@ -128,7 +128,7 @@ Supabase가 주는 구글 토큰(`provider_token`)은 로그인 직후에만 있
 
 ### 6.1 공식 템플릿 (FR-NX-1)
 
-- 소유자의 지금 `악기 연습` 페이지에서 데이터 없이 구조만 복제해 `ULeveLP 템플릿` 페이지를 만듭니다. 내용: 연습 곡·연습 기록·학습 영상 노트 DB([04 6장](04-data-model.md#6-노션-템플릿-대응표)), 사용법 안내(내보내기 파일 넣는 법), 첫 화면 임베드(`https://hunseokc.github.io/guitar-practice/`).
+- 소유자의 지금 `악기 연습` 페이지에서 데이터 없이 구조만 복제해 `ULeveLP 템플릿` 페이지를 만듭니다. 내용: 연습 곡·연습 기록·학습 영상 노트 DB([04 6장](04-data-model.md#6-노션-템플릿-대응표)), 사용법 안내(내보내기 파일 넣는 법), 첫 화면 임베드(`https://hunseokc.github.io/ULevelP/`).
 - 연습 곡 DB에 수식 속성 `연습하기`를 둡니다(지금 `apps-script/README.md`의 수식과 같음). 노션에서 곡을 눌러 바로 플레이어를 엶.
 - 페이지를 웹에 게시하고 **템플릿으로 복제 허용**을 켭니다. 그 공개 주소를 `config.js`의 `notionTemplateUrl`에 두고 SETTING에서 링크합니다.
 - 템플릿 구조를 바꾸면 이 문서의 04 6장, 내보내기·가져오기 코드, 소유자 연동 코드를 같이 바꿉니다.
