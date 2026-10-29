@@ -7,28 +7,33 @@ Supabase Postgres 기준입니다. 이 문서의 SQL을 `supabase/migrations/000
 ```
 auth.users 1─1 profiles
 auth.users 1─* songs 1─* sessions 1─* takes
-auth.users 1─* notes            (소유자만 씀)
-auth.users 1─* analysis_jobs    (소유자만 씀)
-auth.users 1─1 integrations     (소유자만 씀, 키는 vault.secrets)
-notion_links: (entity, entity_id) → 노션 페이지 ID  (소유자 연동)
-sync_outbox: 노션으로 보낼 변경 대기열        (소유자 연동)
+auth.users 1─* notes            (Gemini 키를 등록한 사용자)
+auth.users 1─* analysis_jobs    (Gemini 키를 등록한 사용자)
+auth.users 1─* integrations     (키를 등록한 사용자. (user_id, app_id, provider)마다 한 행, 키 원문은 vault.secrets)
+auth.users 1─1 notion_sync      (노션 실시간 연동 상태)
+notion_links: (entity, entity_id) → 노션 페이지 ID  (노션 실시간 연동)
+sync_outbox: 노션으로 보낼 변경 대기열        (노션 실시간 연동)
 ```
+
+**키 등록 사용자 (D13·D15):** 노션 실시간 연동과 학습 노트는 소유자 전용이 아니라, 해당 키(노션 / Gemini)를 등록한 사용자면 누구나 씁니다. 소유자(`profiles.role = 'owner'`)에게만 있는 것은 `take_quota_bytes` 같은 운영 값뿐이고, 기능을 열고 막는 데는 `role`을 쓰지 않습니다.
+
+**공용 키 테이블 (D18):** `integrations`와 키 함수(`save_*_key`, `get_*_key`)는 guitar-practice도 같은 Supabase 프로젝트에서 씁니다(`app_id = 'guitar-practice'`). 이 문서의 마이그레이션이 원본이고, guitar-practice는 `개발산출물/결과/R2_설계개정.md`의 공용 스키마 절을 따릅니다.
 
 ## 2. 공통
 
 ```sql
 create extension if not exists pgcrypto;
 
+-- API로 노출되지 않는 내부 함수용 스키마 (PostgREST는 public만 노출)
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
 -- updated_at 자동 갱신
 create function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
-
--- 이 사용자가 소유자인지
-create function is_owner(uid uuid default auth.uid()) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from profiles where id = uid and role = 'owner')
-$$;
 ```
+
+`security definer` 함수는 모두 `set search_path = ''`로 두고 테이블·함수 이름을 스키마까지 적습니다(`public.profiles`, `vault.secrets`). 함수 실행 권한은 [4.5](#45-함수-실행-권한)에서 역할 이름을 적어 회수합니다.
 
 ## 3. 테이블
 
@@ -38,7 +43,7 @@ $$;
 create table profiles (
   id uuid primary key references auth.users on delete cascade,
   display_name text not null default '',
-  role text not null default 'user' check (role in ('user', 'owner')),
+  role text not null default 'user' check (role in ('user', 'owner')),  -- 운영 표시. 기능을 열고 막는 데 쓰지 않음 (D15)
   storage_provider text not null default 'supabase' check (storage_provider in ('supabase', 'drive')),
   drive_folder_id text,                         -- P6: 'ULeveLP 녹음' 폴더
   take_quota_bytes bigint not null default 209715200,  -- 200MB
@@ -50,9 +55,9 @@ create trigger profiles_updated before update on profiles for each row execute f
 
 -- 가입하면 profiles 행 생성
 create function handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
-  insert into profiles (id, display_name)
+  insert into public.profiles (id, display_name)
   values (new.id, coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)));
   return new;
 end $$;
@@ -146,7 +151,9 @@ create trigger takes_quota before insert on takes for each row execute function 
 
 파일 이름(드라이브, 내보내기, 노션): `YYYY-MM-DD HHMM 곡명.확장자` (곡명에서 `\/:*?"<>|` 는 공백으로, 60자까지).
 
-### 3.5 notes (노션: 학습 영상 노트) · 소유자
+### 3.5 notes (노션: 학습 영상 노트) · Gemini 키 등록 사용자
+
+행은 `analyze-video`(service role)만 만듭니다. Gemini 키 확인은 만들 때 한 번 하고, 키를 지운 뒤에도 이미 만든 노트는 본인 데이터라 계속 보입니다(내보내기 포함).
 
 ```sql
 create table notes (
@@ -170,7 +177,7 @@ create index notes_user on notes (user_id, created_at desc);
 
 같은 영상을 다른 태그로 여러 번 분석할 수 있어서 `video_id`에 unique를 두지 않습니다.
 
-### 3.6 analysis_jobs · 소유자
+### 3.6 analysis_jobs · Gemini 키 등록 사용자
 
 ```sql
 create table analysis_jobs (
@@ -189,31 +196,62 @@ create table analysis_jobs (
 create index analysis_jobs_user on analysis_jobs (user_id, created_at desc);
 ```
 
-### 3.7 integrations · 소유자
+### 3.7 integrations · 키를 등록한 사용자 (ULevelP·guitar-practice 공용)
 
-키 원문은 `vault.secrets`에만 있고, 여기에는 Vault 비밀의 ID와 끝 4자리만 둡니다.
+[키 보관 가이드](../개발산출물/자료/키캐싱_가이드_요약.md) 2절을 따릅니다. 키 원문은 `vault.secrets`에만 있고, 이 테이블에는 Vault 비밀의 ID, 끝 4자리, 설정(DB ID·모델), 갱신 시각만 둡니다.
+
+- 저장은 `save_notion_key`·`save_gemini_key` RPC로만([4.4](#44-키-저장조회-save__key-get__key)). 이 테이블에는 insert·update 정책이 없습니다.
+- 클라이언트는 본인 행의 `secret_id`를 뺀 열만 읽고, 본인 행을 지울 수 있습니다(연결 해제). 지우면 트리거가 Vault 비밀도 지웁니다(계정 삭제 cascade 포함).
+- 원문 조회(`get_*_key`)는 service role 전용이고 Edge Function(ULevelP)과 Apps Script(guitar-practice)만 부릅니다.
 
 ```sql
 create table integrations (
+  user_id uuid not null references auth.users on delete cascade,
+  app_id text not null check (app_id in ('ulevelp', 'guitar-practice')),
+  provider text not null check (provider in ('notion', 'gemini')),
+  secret_id uuid not null,                 -- vault.secrets.id
+  hint text not null,                      -- 키 끝 4자리 (화면 표시용)
+  config jsonb not null default '{}' check (jsonb_typeof(config) = 'object'),
+    -- notion: {"songsDb", "sessionsDb", "notesDb"?} (32자리 hex), gemini: {"model"}
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),   -- 키 버전. guitar-practice 캐시 키에 씀
+  primary key (user_id, app_id, provider)
+);
+create trigger integrations_updated before update on integrations for each row execute function set_updated_at();
+
+-- 연결 행이 지워지면 Vault 비밀도 지우고, ULevelP 노션 키면 실시간 연동을 끔
+create function private.integrations_drop_secret() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from vault.secrets where id = old.secret_id;
+  if old.app_id = 'ulevelp' and old.provider = 'notion' then
+    update public.notion_sync set enabled = false where user_id = old.user_id;
+  end if;
+  return old;
+end $$;
+create trigger integrations_secret_cleanup after delete on integrations
+  for each row execute function private.integrations_drop_secret();
+```
+
+Vault 비밀 이름은 `{app_id}:{provider}:{user_id}`입니다(`vault.secrets.name`이 unique라 같은 키가 두 번 생기지 않음).
+
+### 3.8 notion_sync · 노션 실시간 연동 상태 (ULevelP 전용)
+
+```sql
+create table notion_sync (
   user_id uuid primary key references auth.users on delete cascade,
-  notion_secret_id uuid,          -- vault.secrets.id
-  notion_hint text,               -- 끝 4자리 (화면 표시용)
-  gemini_secret_id uuid,
-  gemini_hint text,
-  gemini_model text not null default 'gemini-flash-latest',
-  notion_songs_db text,           -- 연습 곡 DB ID (32자리)
-  notion_sessions_db text,        -- 연습 기록 DB ID
-  notion_notes_db text,           -- 학습 영상 노트 DB ID
-  notion_sync_enabled boolean not null default false,
+  enabled boolean not null default false,   -- 처음 연동(notion-pull full)이 끝나면 true
   last_push_at timestamptz,
   last_pull_at timestamptz,
   last_error text,
   updated_at timestamptz not null default now()
 );
-create trigger integrations_updated before update on integrations for each row execute function set_updated_at();
+create trigger notion_sync_updated before update on notion_sync for each row execute function set_updated_at();
 ```
 
-### 3.8 notion_links, sync_outbox · 소유자 연동
+켜기는 `notion-pull`(service role)만 합니다. 클라이언트는 끄기(`enabled = false`)만 할 수 있습니다. ULevelP 노션 키를 지우면 위 트리거가 끕니다.
+
+### 3.9 notion_links, sync_outbox · 노션 실시간 연동
 
 ```sql
 create table notion_links (
@@ -242,22 +280,22 @@ create index sync_outbox_pending on sync_outbox (user_id, id) where done_at is n
 
 -- 연동이 켜진 사용자의 변경만 대기열에 넣음. 같은 대상의 처리 안 된 upsert가 있으면 또 넣지 않음
 -- 노션에서 가져온 변경(app.sync_source = 'notion')은 다시 보내지 않음
-create function enqueue_sync() returns trigger language plpgsql security definer set search_path = public as $$
+create function private.enqueue_sync() returns trigger language plpgsql security definer set search_path = '' as $$
 declare r record; v_kind text := tg_argv[0]; v_op text;
 begin
   if current_setting('app.sync_source', true) = 'notion' then return null; end if;
   if tg_op = 'DELETE' then r := old; v_op := 'delete'; else r := new; v_op := 'upsert'; end if;
-  if not exists (select 1 from integrations i where i.user_id = r.user_id and i.notion_sync_enabled) then return null; end if;
+  if not exists (select 1 from public.notion_sync n where n.user_id = r.user_id and n.enabled) then return null; end if;
   if v_op = 'upsert' and exists (
-    select 1 from sync_outbox o where o.entity = v_kind and o.entity_id = r.id and o.op = 'upsert' and o.done_at is null
+    select 1 from public.sync_outbox o where o.entity = v_kind and o.entity_id = r.id and o.op = 'upsert' and o.done_at is null
   ) then return null; end if;
-  insert into sync_outbox (user_id, entity, entity_id, op) values (r.user_id, v_kind, r.id, v_op);
+  insert into public.sync_outbox (user_id, entity, entity_id, op) values (r.user_id, v_kind, r.id, v_op);
   return null;
 end $$;
-create trigger songs_sync after insert or update or delete on songs for each row execute function enqueue_sync('song');
-create trigger sessions_sync after insert or update or delete on sessions for each row execute function enqueue_sync('session');
-create trigger takes_sync after insert or update or delete on takes for each row execute function enqueue_sync('take');
-create trigger notes_sync after insert or update or delete on notes for each row execute function enqueue_sync('note');
+create trigger songs_sync after insert or update or delete on songs for each row execute function private.enqueue_sync('song');
+create trigger sessions_sync after insert or update or delete on sessions for each row execute function private.enqueue_sync('session');
+create trigger takes_sync after insert or update or delete on takes for each row execute function private.enqueue_sync('take');
+create trigger notes_sync after insert or update or delete on notes for each row execute function private.enqueue_sync('note');
 ```
 
 삭제된 행은 `entity_id`로 다시 찾을 수 없으니, 노션 쪽 삭제는 `notion_links`의 페이지 ID로 처리합니다(노션 페이지는 보관함으로 이동).
@@ -328,6 +366,160 @@ returns void language sql security invoker as $$
 $$;
 ```
 
+### 4.4 키 저장·조회 (`save_*_key`, `get_*_key`)
+
+- 저장 RPC는 브라우저가 부릅니다. 사용자는 함수 안에서 `auth.uid()`로 정하므로 남의 `user_id`로 저장할 수 없습니다. 반환은 끝 4자리와 갱신 시각뿐입니다.
+- 키 인자를 `null`로 주면 키는 그대로 두고 설정(DB ID·모델)만 바꿉니다. 처음 저장할 때는 키가 꼭 있어야 합니다.
+- 형식이 틀리면 `errcode = '22023'`과 아래 메시지로 거부합니다. 화면은 메시지로 안내 문구를 고릅니다.
+
+| 메시지 | 뜻 |
+| --- | --- |
+| `not_authenticated` (errcode `28000`) | 로그인 안 됨 |
+| `invalid_app_id` | `app_id`가 `ulevelp`·`guitar-practice`가 아님 |
+| `missing_key` | 처음 저장인데 키 인자가 `null` |
+| `invalid_notion_token` | `^(ntn_\|secret_)[A-Za-z0-9]{20,}$`가 아님 |
+| `invalid_notion_db_id` | DB ID가 `^[0-9a-f]{32}$`가 아님 (하이픈 있는 UUID·노션 링크는 클라이언트가 32자리로 바꿔서 보냄) |
+| `invalid_gemini_key` | `^AIza[0-9A-Za-z_-]{30,60}$`가 아님 |
+| `invalid_gemini_model` | `^[a-z0-9][a-z0-9.-]{0,63}$`가 아님 |
+
+```sql
+-- 공통: Vault에 넣거나 바꾸고 integrations 행을 맞춤 (API로 노출 안 됨)
+create function private.put_key(p_uid uuid, p_app_id text, p_provider text, p_secret text, p_config jsonb)
+returns void language plpgsql security definer set search_path = '' as $$
+declare sid uuid;
+begin
+  select i.secret_id into sid from public.integrations i
+   where i.user_id = p_uid and i.app_id = p_app_id and i.provider = p_provider for update;
+  if sid is null then
+    if p_secret is null then raise exception 'missing_key' using errcode = '22023'; end if;
+    sid := vault.create_secret(p_secret, format('%s:%s:%s', p_app_id, p_provider, p_uid), p_provider || ' key');
+    insert into public.integrations (user_id, app_id, provider, secret_id, hint, config)
+    values (p_uid, p_app_id, p_provider, sid, right(p_secret, 4), p_config);
+  else
+    if p_secret is not null then perform vault.update_secret(sid, p_secret); end if;
+    update public.integrations i
+       set config = p_config, hint = coalesce(right(p_secret, 4), i.hint)
+     where i.user_id = p_uid and i.app_id = p_app_id and i.provider = p_provider;
+  end if;
+end $$;
+
+create function save_notion_key(
+  p_app_id text, p_token text, p_songs_db text, p_sessions_db text, p_notes_db text default null
+) returns table (hint text, updated_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
+  if p_app_id not in ('ulevelp', 'guitar-practice') then raise exception 'invalid_app_id' using errcode = '22023'; end if;
+  if p_token is not null and p_token !~ '^(ntn_|secret_)[A-Za-z0-9]{20,}$' then
+    raise exception 'invalid_notion_token' using errcode = '22023';
+  end if;
+  if coalesce(p_songs_db, '') !~ '^[0-9a-f]{32}$' or coalesce(p_sessions_db, '') !~ '^[0-9a-f]{32}$'
+     or (p_notes_db is not null and p_notes_db !~ '^[0-9a-f]{32}$') then
+    raise exception 'invalid_notion_db_id' using errcode = '22023';
+  end if;
+  perform private.put_key(uid, p_app_id, 'notion', p_token, jsonb_strip_nulls(
+    jsonb_build_object('songsDb', p_songs_db, 'sessionsDb', p_sessions_db, 'notesDb', p_notes_db)));
+  return query select i.hint, i.updated_at from public.integrations i
+   where i.user_id = uid and i.app_id = p_app_id and i.provider = 'notion';
+end $$;
+
+create function save_gemini_key(p_app_id text, p_key text, p_model text default null)
+returns table (hint text, updated_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
+  if p_app_id not in ('ulevelp', 'guitar-practice') then raise exception 'invalid_app_id' using errcode = '22023'; end if;
+  if p_key is not null and p_key !~ '^AIza[0-9A-Za-z_-]{30,60}$' then
+    raise exception 'invalid_gemini_key' using errcode = '22023';
+  end if;
+  p_model := coalesce(p_model, 'gemini-flash-latest');
+  if p_model !~ '^[a-z0-9][a-z0-9.-]{0,63}$' then raise exception 'invalid_gemini_model' using errcode = '22023'; end if;
+  perform private.put_key(uid, p_app_id, 'gemini', p_key, jsonb_build_object('model', p_model));
+  return query select i.hint, i.updated_at from public.integrations i
+   where i.user_id = uid and i.app_id = p_app_id and i.provider = 'gemini';
+end $$;
+
+-- 원문 조회: service role 전용 (Edge Function, guitar-practice Apps Script). 행이 없으면 0행 → 호출 쪽이 412 NO_KEY
+create function get_notion_key(p_user_id uuid, p_app_id text)
+returns table (token text, songs_db text, sessions_db text, notes_db text, updated_at timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select s.decrypted_secret, i.config->>'songsDb', i.config->>'sessionsDb', i.config->>'notesDb', i.updated_at
+    from public.integrations i join vault.decrypted_secrets s on s.id = i.secret_id
+   where i.user_id = p_user_id and i.app_id = p_app_id and i.provider = 'notion'
+$$;
+
+create function get_gemini_key(p_user_id uuid, p_app_id text)
+returns table (api_key text, model text, updated_at timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select s.decrypted_secret, i.config->>'model', i.updated_at
+    from public.integrations i join vault.decrypted_secrets s on s.id = i.secret_id
+   where i.user_id = p_user_id and i.app_id = p_app_id and i.provider = 'gemini'
+$$;
+```
+
+키 지우기(연결 해제)는 RPC 없이 본인 행 삭제입니다: `delete from integrations where app_id = 'ulevelp' and provider = 'notion'` (REST `DELETE /rest/v1/integrations?app_id=eq.ulevelp&provider=eq.notion`). Vault 정리는 3.7 트리거가 합니다.
+
+### 4.5 sync_status: 노션 연동 상태 (FR-SYNC-3)
+
+```sql
+create function sync_status()
+returns table (enabled boolean, pending integer, failed integer, last_push_at timestamptz, last_pull_at timestamptz, last_error text)
+language sql stable security definer set search_path = '' as $$
+  select coalesce(n.enabled, false),
+         (select count(*)::int from public.sync_outbox o where o.user_id = u.uid and o.done_at is null and o.attempts < 5),
+         (select count(*)::int from public.sync_outbox o where o.user_id = u.uid and o.done_at is null and o.attempts >= 5),
+         n.last_push_at, n.last_pull_at, n.last_error
+    from (select auth.uid() as uid) u left join public.notion_sync n on n.user_id = u.uid
+$$;
+```
+
+`apply_notion_pull(p_user_id uuid, payload jsonb)`(노션에서 가져온 변경을 한 트랜잭션으로 쓰는 함수, [03 6.4](03-design.md#64-노션-실시간-연동))는 P4-4에서 이 문서에 추가하고, 권한은 `get_*_key`와 같게 service role 전용으로 둡니다.
+
+### 4.6 함수 실행 권한
+
+Supabase는 `public` 스키마에 새로 만든 함수의 실행 권한을 `anon`·`authenticated`·`service_role`에 **직접** 줍니다. `revoke ... from public`만으로는 회수되지 않으니 역할 이름을 적습니다. 트리거 함수는 `private` 스키마에 두어 API로 부를 수 없게 합니다(`handle_new_user`는 `auth.users` 트리거라 `public`에 두되 같은 방식으로 회수).
+
+```sql
+-- 로그인한 사용자만
+revoke execute on function add_practice(uuid, date, integer, integer, numeric, numeric, numeric) from public, anon;
+revoke execute on function ensure_session(uuid, date) from public, anon;
+revoke execute on function save_song_progress(uuid, numeric, numeric, numeric, numeric, date) from public, anon;
+revoke execute on function save_notion_key(text, text, text, text, text) from public, anon;
+revoke execute on function save_gemini_key(text, text, text) from public, anon;
+revoke execute on function sync_status() from public, anon;
+grant  execute on function add_practice(uuid, date, integer, integer, numeric, numeric, numeric),
+                           ensure_session(uuid, date),
+                           save_song_progress(uuid, numeric, numeric, numeric, numeric, date),
+                           save_notion_key(text, text, text, text, text),
+                           save_gemini_key(text, text, text),
+                           sync_status() to authenticated;
+
+-- service role 전용 (키 원문)
+revoke execute on function get_notion_key(uuid, text) from public, anon, authenticated;
+revoke execute on function get_gemini_key(uuid, text) from public, anon, authenticated;
+grant  execute on function get_notion_key(uuid, text), get_gemini_key(uuid, text) to service_role;
+
+-- 직접 부를 일 없음
+revoke execute on function handle_new_user() from public, anon, authenticated;
+revoke execute on function set_updated_at() from public, anon, authenticated;
+revoke all on all functions in schema private from public, anon, authenticated;
+```
+
+배포 전 점검(모두 `false`, P0-2 pgTAP에 넣음):
+
+```sql
+select has_function_privilege('anon',          'public.get_notion_key(uuid, text)', 'execute'),
+       has_function_privilege('authenticated', 'public.get_notion_key(uuid, text)', 'execute'),
+       has_function_privilege('anon',          'public.get_gemini_key(uuid, text)', 'execute'),
+       has_function_privilege('authenticated', 'public.get_gemini_key(uuid, text)', 'execute'),
+       has_function_privilege('anon',          'public.save_notion_key(text, text, text, text, text)', 'execute'),
+       has_function_privilege('authenticated', 'private.put_key(uuid, text, text, text, jsonb)', 'execute');
+```
+
 ## 5. 접근 정책 (RLS)
 
 ```sql
@@ -338,6 +530,7 @@ alter table takes enable row level security;
 alter table notes enable row level security;
 alter table analysis_jobs enable row level security;
 alter table integrations enable row level security;
+alter table notion_sync enable row level security;
 alter table notion_links enable row level security;
 alter table sync_outbox enable row level security;
 
@@ -360,15 +553,42 @@ create policy takes_all on takes for all
     and exists (select 1 from songs where songs.id = song_id and songs.user_id = auth.uid())
     and exists (select 1 from sessions where sessions.id = session_id and sessions.user_id = auth.uid() and sessions.song_id = takes.song_id));
 
--- 소유자 전용 테이블: 소유자 본인 것만 읽기. 쓰기는 notes 메모 수정 정도만 클라이언트에서, 나머지는 Edge Function(service role)
-create policy notes_select on notes for select using (user_id = auth.uid() and is_owner());
-create policy notes_update on notes for update using (user_id = auth.uid() and is_owner()) with check (user_id = auth.uid());
-create policy notes_delete on notes for delete using (user_id = auth.uid() and is_owner());
-create policy jobs_select on analysis_jobs for select using (user_id = auth.uid() and is_owner());
--- integrations, notion_links, sync_outbox: 클라이언트 정책 없음 (Edge Function이 service role로만 접근)
+-- notes·analysis_jobs: 본인 것만. 행은 analyze-video(service role)만 만듦 → insert 정책 없음.
+-- Gemini 키 확인은 만드는 쪽(Edge Function)이 한다(FR-KEY-GATE). 키를 지워도 이미 만든 노트는 본인 데이터로 남음
+create policy notes_select on notes for select using (user_id = auth.uid());
+create policy notes_update on notes for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy notes_delete on notes for delete using (user_id = auth.uid());
+revoke insert, update on notes from anon, authenticated;
+grant update (memo, tags) on notes to authenticated;
+create policy jobs_select on analysis_jobs for select using (user_id = auth.uid());
+revoke insert, update, delete on analysis_jobs from anon, authenticated;
+
+-- integrations: 본인 행 읽기(secret_id 제외)·지우기만. 저장은 save_*_key RPC로만 (가이드 2절)
+create policy integrations_select on integrations for select using (user_id = auth.uid());
+create policy integrations_delete on integrations for delete using (user_id = auth.uid());
+revoke all on integrations from anon, authenticated;
+grant select (user_id, app_id, provider, hint, config, created_at, updated_at) on integrations to authenticated;
+grant delete on integrations to authenticated;
+
+-- notion_sync: 본인 행 읽기, 끄기만
+create policy notion_sync_select on notion_sync for select using (user_id = auth.uid());
+create policy notion_sync_off on notion_sync for update using (user_id = auth.uid())
+  with check (user_id = auth.uid() and enabled = false);
+revoke all on notion_sync from anon, authenticated;
+grant select on notion_sync to authenticated;
+grant update (enabled) on notion_sync to authenticated;
+
+-- notion_links, sync_outbox: 클라이언트 정책 없음 (Edge Function이 service role로만 접근. 상태는 sync_status())
+revoke all on notion_links, sync_outbox from anon, authenticated;
 ```
 
-**테스트 (P0 필수, NFR-SEC-2):** 사용자 A·B 두 계정을 만들고, B의 JWT로 A의 행을 `select/insert/update/delete`했을 때 모두 0행이거나 거부되는지 테이블마다 확인합니다. B가 A의 `song_id`로 `sessions`·`takes`를 넣는 것도 거부돼야 합니다. 일반 사용자가 `profiles.role`을 바꾸는 것, `integrations`를 읽는 것도 거부돼야 합니다.
+**테스트 (P0 필수, NFR-SEC-2·8):** 사용자 A·B 두 계정을 만들고, B의 JWT로 A의 행을 `select/insert/update/delete`했을 때 모두 0행이거나 거부되는지 테이블마다 확인합니다. B가 A의 `song_id`로 `sessions`·`takes`를 넣는 것도 거부돼야 합니다. 그리고:
+- 일반 사용자가 `profiles.role`·`take_quota_bytes`를 바꾸는 것 거부
+- `integrations`에 직접 insert·update 거부, `secret_id` 열 select 거부, B가 A의 행 삭제 0행
+- `save_notion_key`·`save_gemini_key`: 형식이 틀리면 4.4 표의 메시지로 거부, 저장 후 `vault.secrets`에 이름 `{app_id}:{provider}:{uid}` 한 행, 다시 저장하면 행이 늘지 않고 `updated_at`이 바뀜, 같은 사용자의 `ulevelp`·`guitar-practice` 행이 따로 생김
+- `get_*_key`: `anon`·`authenticated`로 부르면 권한 오류, `service_role`로는 원문이 나옴 (4.6 점검 쿼리 포함)
+- `integrations` 행 삭제(직접, 계정 삭제 cascade 둘 다) 뒤 해당 `vault.secrets` 행 없음, ULevelP 노션 키 삭제 뒤 `notion_sync.enabled = false`
+- `notion_sync.enabled`를 클라이언트가 `true`로 바꾸는 것 거부, `false`로는 허용
 
 ### Storage
 
@@ -390,7 +610,7 @@ create policy takes_obj_delete on storage.objects for delete to authenticated
 
 ## 6. 노션 템플릿 대응표
 
-지금 소유자가 쓰는 노션 구조가 공식 템플릿입니다. **속성 이름과 형식은 바꾸지 않습니다.** 바꾸면 내보내기 CSV, 가져오기, 소유자 연동이 모두 함께 바뀌어야 합니다.
+지금 소유자가 쓰는 노션 구조가 공식 템플릿입니다. **속성 이름과 형식은 바꾸지 않습니다.** 바꾸면 내보내기 CSV, 가져오기, 노션 실시간 연동이 모두 함께 바뀌어야 합니다.
 
 템플릿 페이지 구성:
 
@@ -398,7 +618,7 @@ create policy takes_obj_delete on storage.objects for delete to authenticated
 ULeveLP 템플릿 (페이지)
 ├─ 연습 곡 (인라인 DB)
 ├─ 연습 기록 (인라인 DB)        곡 ↔ 연습 곡.연습 기록 (양방향 관계)
-└─ 학습 영상 노트 (인라인 DB)   소유자만 채움. 일반 사용자는 비어 있어도 됨
+└─ 학습 영상 노트 (인라인 DB)   Gemini 키를 등록한 사용자가 채움. 키가 없으면 비어 있어도 됨
 ```
 
 ### 6.1 연습 곡 ↔ songs
