@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ULeveLP</title>
 <meta name="description" content="코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에서">
@@ -12,7 +13,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="site.css">
-<script>try { var t = localStorage.getItem('gv-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<script src="theme.js"></script>
 </head>
 <body class="home">
 <div class="home-wrap">
@@ -61,62 +62,6 @@
 </div>
 
 <script src="site.js"></script>
-<script>
-'use strict';
-(function () {
-  const $ = (id) => document.getElementById(id);
-  const { raw, videoIdFrom, thumb, esc, notion } = UL;
-
-  // ---------- 링크 붙여넣기 ----------
-  function pick() {
-    const id = videoIdFrom($('goUrl').value);
-    $('goPick').hidden = !id;
-    $('goMsg').textContent = $('goUrl').value.trim() && !id ? '유튜브 영상 링크가 아니에요' : '';
-    $('goMsg').classList.toggle('err', !!$('goMsg').textContent);
-    if (!id) return;
-    $('goThumb').src = thumb(id);
-    $('goPlay').href = 'practice.html?v=' + id;
-    $('goNote').href = 'notes.html?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id);
-  }
-  $('goUrl').addEventListener('input', pick);
-  $('go').addEventListener('submit', (e) => { e.preventDefault(); pick(); if (!$('goPick').hidden) location.href = $('goPlay').href; });
-
-  // ---------- 코드 연습: 탭 목록, 마지막으로 쓴 탭 표시 ----------
-  const MODES = [['scale', '스케일 연습'], ['tone', '코드톤 지도'], ['matrix', '보이싱 매트릭스'], ['circle', '탑노트 5도권'], ['reint', '우기기'], ['tf', '2-5-1 탐색']];
-  const last = raw.get('gv-tab');
-  $('modes').innerHTML = MODES.map(([id, name], i) =>
-    '<li' + (id === last ? ' class="cur"' : '') + '><a href="chords.html#' + id + '"><span class="t">' + (i + 1) + ' · ' + name + '</span>' +
-    '<span class="m">' + (id === last ? '이어서' : '') + '</span></a></li>').join('');
-
-  // ---------- 플레이어: 노션의 연습 곡 ----------
-  function songsNote(t, href) {
-    $('songs').innerHTML = '<li class="note">' + (href ? '<a href="' + href + '">' + esc(t) + '</a>' : esc(t)) + '</li>';
-  }
-  async function loadSongs() {
-    if (!notion.ok()) return songsNote('SETTING에서 노션을 연결하면 연습 곡이 여기 보여요', 'settings.html#notion');
-    songsNote('불러오는 중…');
-    try {
-      const songs = ((await notion.call('/songs')).songs || []).slice(0, 5);
-      if (!songs.length) return songsNote('아직 곡이 없어요. 위에 링크를 붙여넣어 시작하세요');
-      $('songs').innerHTML = songs.map((s) => {
-        const meta = [s.status, s.rate ? s.rate + '×' : '', s.lastDate ? s.lastDate.slice(5).replace('-', '/') : ''].filter(Boolean).join(' · ');
-        return '<li><a href="practice.html?v=' + encodeURIComponent(s.videoId) + '"><span class="t">' + esc(s.title) + '</span><span class="m">' + esc(meta) + '</span></a></li>';
-      }).join('');
-    } catch (e) {
-      songsNote(e.message);
-    }
-  }
-  loadSongs();
-
-  // ---------- 노션 바로가기 ----------
-  const links = [['nlPractice', raw.get('ul-notion-practice')], ['nlNotes', raw.get('ul-notion-notes')]];
-  links.forEach(([id, href]) => { $(id).hidden = !href; if (href) $(id).href = href; });
-  $('notionLinks').hidden = !links.some(([, href]) => href);
-  const main = links.find(([, href]) => href);
-  if (main) { $('notionBig').href = main[1]; $('notionBig').target = '_blank'; $('notionBig').rel = 'noopener'; }
-
-  $('copy').textContent = '©' + new Date().getFullYear();
-})();
-</script>
+<script src="home.js"></script>
 </body>
 </html>

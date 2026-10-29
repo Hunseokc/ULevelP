@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>연습 플레이어</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,7 +15,7 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="site.css">
 <link rel="stylesheet" href="practice.css">
-<script>try { var t = localStorage.getItem('gv-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<script src="theme.js"></script>
 </head>
 <body class="pp">
 <div class="pp-wrap">

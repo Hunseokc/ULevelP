@@ -36,7 +36,7 @@
   // ---------- 상태 ----------
   const st = {
     videoId: null, song: null, ready: false, playing: false, duration: 0,
-    a: null, b: null, loopOn: false, lead: store.get('pp-lead', 1), rate: 1,
+    a: null, b: null, loopOn: false, lead: store.get('ulp:lead', 1), rate: 1,
     loops: 0, unsavedSec: 0, unsavedLoops: 0, dirty: false, seekGuardUntil: 0,
     saving: false, savePending: false, startAt: 0,
   };
@@ -85,7 +85,7 @@
   const leadBtns = LEADS.map((s) => {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = s + '초'; b.setAttribute('aria-label', '반복 전 여유 ' + s + '초'); b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => { st.lead = s; store.set('pp-lead', s); render(); });
+    b.addEventListener('click', () => { st.lead = s; store.set('ulp:lead', s); render(); });
     $('leads').appendChild(b); return b;
   });
 

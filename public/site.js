@@ -1,5 +1,5 @@
 // 사이트 공통: 브라우저 저장, 노션 중계 서버(Apps Script), GitHub Actions(학습 노트) 호출
-// 저장 키: pp-api·pp-key(연습 플레이어, JSON으로 저장), sn-token·sn-repo(학습 노트), ul-notion-*(노션 바로가기), gv-theme(화면 모드)
+// 저장 키: pp-api·pp-key(연습 플레이어, JSON으로 저장), sn-token·sn-repo(학습 노트), ulp:notion-*(노션 바로가기), ulp:theme(화면 모드)
 'use strict';
 window.UL = (function () {
   const raw = {
@@ -20,6 +20,10 @@ window.UL = (function () {
   }
   const thumb = (id) => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg';
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // href·src에 넣는 외부 URL: https:만 통과, 나머지(javascript:, data: 등)는 빈 문자열
+  function safeUrl(u) {
+    try { const x = new URL(String(u || '').trim()); return x.protocol === 'https:' ? x.href : ''; } catch (e) { return ''; }
+  }
 
   // Apps Script는 커스텀 헤더·preflight를 못 받아서 text/plain POST 하나로 보냄 (practice.js와 같은 형식)
   const notion = {
@@ -68,5 +72,5 @@ window.UL = (function () {
     },
   };
 
-  return { raw, json, videoIdFrom, thumb, esc, notion, gh };
+  return { raw, json, videoIdFrom, thumb, esc, safeUrl, notion, gh };
 })();

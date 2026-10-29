@@ -244,7 +244,7 @@
       $('tab-' + t).setAttribute('aria-selected', t === id);
       $('pane-' + t).hidden = t !== id;
     });
-    try { localStorage.setItem('gv-tab', id); } catch (e) { /* 저장 불가 무시 */ }
+    try { localStorage.setItem('ulp:tab', id); } catch (e) { /* 저장 불가 무시 */ }
   }
   TABS.forEach((t) => $('tab-' + t).addEventListener('click', () => showTab(t)));
 
@@ -874,13 +874,13 @@
   }
   ['light', 'dark'].forEach((t) => $('theme-' + t).addEventListener('click', () => {
     applyTheme(t);
-    try { localStorage.setItem('gv-theme', t); } catch (e) { /* 저장 불가 무시 */ }
+    try { localStorage.setItem('ulp:theme', t); } catch (e) { /* 저장 불가 무시 */ }
   }));
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
   applyTheme();
 
   let startTab = 'scale';
-  try { const s = localStorage.getItem('gv-tab'); if (s && TABS.includes(s)) startTab = s; } catch (e) { /* 무시 */ }
+  try { const s = localStorage.getItem('ulp:tab'); if (s && TABS.includes(s)) startTab = s; } catch (e) { /* 무시 */ }
   if (/^#(tone|matrix|circle|reint|tf|scale)$/.test(location.hash)) startTab = location.hash.slice(1);
   showTab(startTab);
 })();
