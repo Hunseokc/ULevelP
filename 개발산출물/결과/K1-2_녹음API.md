@@ -219,5 +219,9 @@ BUILD SUCCESSFUL in 24s
   - `TakeRoutes.kt` DELETE 응답 본문을 `call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })` 형태로 통일.
 - **체크리스트 일반화 반영:**
   - `개발산출물/주니어_체크리스트.md`에 2단계 보상 시 `NonCancellable` 사용 규칙, 정리/실패 결과 식별자 배타성 단언 규칙, 응답 빌더 통일 및 미사용 import 금지 규칙 추가.
+- **CI T18 실패 해결 (Exposed `newSuspendedTransaction` 부모 Job 단절 방지):**
+  - Exposed의 `newSuspendedTransaction(Dispatchers.IO, db)`는 인자로 넘겨진 디스패처 컨텍스트만으로 내부 `TransactionScope`를 생성하여 호출자의 부모 `Job` 컨텍스트가 상실되고, 이로 인해 부모 코루틴 취소 시에도 트랜잭션이 롤백되지 않고 커밋되는 문제가 발생했습니다.
+  - `DatabaseFactory.dbQuery`를 `withContext(Dispatchers.IO) { newSuspendedTransaction(db = db) { currentCoroutineContext().ensureActive(); val res = block(); currentCoroutineContext().ensureActive(); res } }`로 개선하여, 부모 Job 계층 구조를 보존하고 취소 발생 시 트랜잭션이 안전하게 롤백되도록 수정했습니다.
+
 
 
