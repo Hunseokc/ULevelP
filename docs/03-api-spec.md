@@ -67,7 +67,7 @@
   "email": "player@example.com",
   "displayName": "player",
   "role": "user",
-  "storageProvider": "gcs",
+  "storageProvider": "supabase",
   "driveFolderId": null,
   "takeUsedBytes": 45219840,
   "takeQuotaBytes": 209715200,
@@ -81,7 +81,7 @@
 
 ### 2.3 내 프로필 설정 수정
 - **`PATCH /api/v1/me`**
-- **설명:** 표시 이름, 녹음 저장소(`gcs` | `drive`), 구글 드라이브 폴더 ID, 로컬 기록 이관 완료 시각만 수정할 수 있습니다(`role`, `takeQuotaBytes`는 변경 불가, `FR-AUTH-3`). 노션 실시간 연동이 켜져 있는 상태에서 `storageProvider: "drive"`로 변경 시 `409 Conflict`로 거부합니다(`FR-SYNC-5`).
+- **설명:** 표시 이름, 녹음 저장소(`supabase` | `drive`), 구글 드라이브 폴더 ID, 로컬 기록 이관 완료 시각만 수정할 수 있습니다(`role`, `takeQuotaBytes`는 변경 불가, `FR-AUTH-3`). 노션 실시간 연동이 켜져 있는 상태에서 `storageProvider: "drive"`로 변경 시 `409 Conflict`로 거부합니다(`FR-SYNC-5`).
 - **Request Body:**
 ```json
 {
@@ -94,7 +94,7 @@
 
 ### 2.4 계정 탈퇴 (전체 삭제)
 - **`DELETE /api/v1/me`**
-- **설명:** 사용자의 클라우드 스토리지 오디오 파일(`takes/{userId}/*`) 전체 삭제 → 암호화된 API 키 삭제 → DB 사용자 행 삭제(`ON DELETE CASCADE`)를 수행합니다(`FR-AUTH-4`).
+- **설명:** 사용자의 Supabase Storage 오디오 파일(`takes/{userId}/*`)을 `storage_trash`에 넣어 삭제 → 암호화된 API 키 삭제 → DB 사용자 행 삭제(`ON DELETE CASCADE`)를 수행합니다(`FR-AUTH-4`).
 - **Request Body:** `{ "confirmText": "삭제합니다" }`
 - **Response (`200 OK`):** `{ "ok": true }`
 
@@ -183,7 +183,7 @@
       "durationSec": 18,
       "mime": "audio/mp4",
       "sizeBytes": 284120,
-      "storage": "gcs",
+      "storage": "supabase",
       "storageKey": "550e.../t1000....m4a",
       "memo": ""
     }
@@ -196,7 +196,7 @@
   - **Request Body:** `{ "status": "보류", "memo": "다음 달 재도전", "title": "수정할 제목(선택)" }`
   - **Response (`200 OK`):** `{ "song": { ... } }`
 - **`DELETE /api/v1/songs/{songId}`**
-  - **설명:** 곡과 하위 `sessions`, `takes`(스토리지 파일 포함)를 삭제하고, 노션 연동 활성화 시 `sync_outbox`에 `delete` 이벤트를 적재합니다(`FR-SONG-5`).
+  - **설명:** 곡과 하위 `sessions`, `takes`를 삭제하고 녹음 파일은 `storage_trash`로 지웁니다. 노션 연동 활성화 시 곡과 각 세션의 `delete` 이벤트를 `sync_outbox`에 적재합니다(`FR-SONG-5`, 절차는 [04 3.2.1절](04-db-design.md)).
   - **Response (`200 OK`):** `{ "ok": true }`
 
 ### 3.6 비로그인 로컬 기록 일괄 마이그레이션
@@ -300,7 +300,7 @@
 ### 5.1 녹음 업로드 (`Multipart` 또는 `Drive` 메타 등록)
 - **`POST /api/v1/takes`**
 - **설명:**
-  - **방식 1 (`multipart/form-data`, 기본 클라우드 스토리지):** `metadata`(JSON 파트)와 `file`(오디오 바이너리 파트)을 전송합니다. 서버가 200MB 쿼터를 검사(`FR-TAKE-4`)하고, 당일 세션이 없으면 0분 세션을 생성(`FR-TAKE-2`)한 뒤 스토리지(`{userId}/{takeId}.{ext}`)에 저장합니다.
+  - **방식 1 (`multipart/form-data`, 기본 Supabase Storage):** `metadata`(JSON 파트)와 `file`(오디오 바이너리 파트)을 전송합니다. 서버가 200MB 쿼터를 검사(`FR-TAKE-4`)하고, 당일 세션이 없으면 0분 세션을 생성(`FR-TAKE-2`)한 뒤 스토리지(`{userId}/{takeId}.{ext}`)에 저장합니다. 업로드·DB 기록 순서는 [04 3.2절](04-db-design.md) 참고.
   - **방식 2 (`application/json`, Google Drive 모드 `P6`):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`).
 - **Response (`201 Created`):**
 ```json
@@ -313,19 +313,19 @@
     "durationSec": 18,
     "mime": "audio/mp4",
     "sizeBytes": 284120,
-    "storage": "gcs"
+    "storage": "supabase"
   }
 }
 ```
 
 ### 5.2 녹음 재생용 서명 URL 발급
 - **`GET /api/v1/takes/{takeId}/url`**
-- **설명:** 클라우드 스토리지에 저장된 녹음에 대해 60분간 유효한 Presigned GET URL을 반환합니다(`FR-TAKE-6`).
+- **설명:** Supabase Storage에 저장된 녹음에 대해 60분간 유효한 서명 URL(`createSignedUrl`)을 반환합니다(`FR-TAKE-6`).
 - **Response (`200 OK`):** `{ "url": "https://storage.googleapis.com/...", "expiresIn": 3600 }`
 
 ### 5.3 녹음 삭제 및 드라이브 이전 갱신
 - **`DELETE /api/v1/takes/{takeId}`**: 스토리지 파일 및 `takes` 행 삭제, 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`).
-- **`POST /api/v1/takes/{takeId}/migrate-drive`**: 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 클라우드 스토리지 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
+- **`POST /api/v1/takes/{takeId}/migrate-drive`**: 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
 
 ---
 
@@ -429,7 +429,9 @@
 ### 7.3 수동/자동 Pull 및 Push 트리거
 - **`POST /api/v1/notion/sync/pull`**: 노션에서 `last_edited_time > last_pull_at`인 변경사항을 가져옵니다(5분 쿨다운 적용, `FR-SYNC-2`).
 - **`POST /api/v1/notion/sync/push`**: 클라이언트가 저장 직후 호출하는 즉시 반영 트리거(본인 대기열만 비동기 실행).
-- **`POST /internal/cron/notion-push`**: Google Cloud Scheduler가 1분마다 호출하는 배치 엔드포인트(OIDC 서비스 계정 토큰 검증). 대기열(`sync_outbox`)이 있는 사용자들을 순회하며 처리합니다(`FR-SYNC-1`).
+- **`POST /internal/cron/notion-push`**: Google Cloud Scheduler가 1분마다 호출하는 배치 엔드포인트. 대기열(`sync_outbox`)이 있는 사용자들을 순회하며 처리하고(`FR-SYNC-1`), 같은 호출에서 `storage_trash` 파일 삭제와 70분 넘게 `running`인 `analysis_jobs` 정리도 합니다.
+  - **호출자 검증:** Cloud Run 서비스는 사용자용으로 공개(인증 없이 호출 허용)이므로 앱이 직접 검증합니다. `Authorization: Bearer <Google OIDC ID 토큰>`을 Google JWKS(`https://www.googleapis.com/oauth2/v3/certs`)로 서명 검증하고, `iss` = `https://accounts.google.com`, `aud` = 환경변수 `CRON_AUDIENCE`(서비스 URL), `email` = 환경변수 `CRON_SA_EMAIL` 이고 `email_verified = true`인지 확인합니다. 하나라도 틀리면 `401`.
+  - Cloud Scheduler 작업의 OIDC 설정: 서비스 계정 = `CRON_SA_EMAIL`, audience = `CRON_AUDIENCE`. 분석 Job 실행용 서비스 계정에는 `run.jobs.runWithOverrides` 권한을 줍니다.
 
 ### 7.4 노션 호환 ZIP 내보내기 및 노션 백업 ZIP 가져오기
 - **`GET /api/v1/export/zip?includeAudio=true`**
@@ -445,7 +447,7 @@
 
 ### 8.1 영상 분석 요청 (비동기 Job 생성)
 - **`POST /api/v1/notes/analyze`**
-- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건, 일 최대 20건 `429 RATE_LIMITED`)을 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 백그라운드 Coroutine 워커에서 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`).
+- **설명:** 사용자의 Gemini 키 등록 여부(`412 NO_KEY`)와 요청 제한(동시 실행 1건, 일 최대 20건 `429 RATE_LIMITED`)을 검사한 뒤, `analysis_jobs` 행(`queued`)을 만들고 Cloud Run Job `analyze`(`runWithOverrides`, 인자 `jobId`)를 실행해 Gemini 분석을 시작합니다(`FR-NOTE-1`, `FR-NOTE-2`).
 - **Request Body:**
 ```json
 {

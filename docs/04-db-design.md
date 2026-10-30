@@ -32,7 +32,7 @@ erDiagram
 
     users {
         uuid id PK
-        text email UK
+        text email
         text google_sub UK
         timestamptz created_at
     }
@@ -40,7 +40,7 @@ erDiagram
         uuid id PK, FK
         text display_name
         text role "user | owner"
-        text storage_provider "gcs | supabase | drive"
+        text storage_provider "supabase | drive"
         text drive_folder_id
         bigint take_quota_bytes "기본 200MB"
         timestamptz migrated_local_at
@@ -80,7 +80,7 @@ erDiagram
         integer duration_sec
         text mime
         bigint size_bytes
-        text storage "gcs | supabase | drive"
+        text storage "supabase | drive"
         text storage_key
     }
     notes {
@@ -123,7 +123,7 @@ END $$;
 -- ============================================================
 CREATE TABLE users (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email        TEXT NOT NULL UNIQUE,
+  email        TEXT NOT NULL,         -- 구글 계정 이메일은 바뀔 수 있어 UNIQUE를 걸지 않는다. 신원은 google_sub
   google_sub   TEXT NOT NULL UNIQUE,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -132,7 +132,7 @@ CREATE TABLE profiles (
   id                 UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   display_name       TEXT NOT NULL DEFAULT '',
   role               TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'owner')),
-  storage_provider   TEXT NOT NULL DEFAULT 'gcs' CHECK (storage_provider IN ('gcs', 'supabase', 'drive')),
+  storage_provider   TEXT NOT NULL DEFAULT 'supabase' CHECK (storage_provider IN ('supabase', 'drive')),
   drive_folder_id    TEXT,
   take_quota_bytes   BIGINT NOT NULL DEFAULT 209715200 CHECK (take_quota_bytes >= 0), -- 기본 200MB
   migrated_local_at  TIMESTAMPTZ,
@@ -160,6 +160,7 @@ CREATE TABLE songs (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, video_id),
+  UNIQUE (user_id, id),            -- 하위 테이블 복합 FK 대상 (다른 사용자 곡 참조 차단)
   CHECK (a IS NULL OR b IS NULL OR a < b)
 );
 CREATE INDEX songs_user_status_idx ON songs (user_id, status, last_date DESC NULLS LAST, updated_at DESC);
@@ -171,7 +172,7 @@ CREATE TRIGGER songs_updated BEFORE UPDATE ON songs FOR EACH ROW EXECUTE FUNCTIO
 CREATE TABLE sessions (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  song_id     UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  song_id     UUID NOT NULL,
   date        DATE NOT NULL,
   seconds     INTEGER NOT NULL DEFAULT 0 CHECK (seconds >= 0),
   loops       INTEGER NOT NULL DEFAULT 0 CHECK (loops >= 0),
@@ -181,7 +182,9 @@ CREATE TABLE sessions (
   memo        TEXT NOT NULL DEFAULT '',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (user_id, song_id, date)
+  UNIQUE (user_id, song_id, date),
+  UNIQUE (user_id, id, song_id),   -- takes 복합 FK 대상
+  FOREIGN KEY (user_id, song_id) REFERENCES songs (user_id, id) ON DELETE CASCADE
 );
 CREATE INDEX sessions_user_date_idx ON sessions (user_id, date DESC);
 CREATE INDEX sessions_song_date_idx ON sessions (song_id, date DESC);
@@ -193,8 +196,8 @@ CREATE TRIGGER sessions_updated BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE F
 CREATE TABLE takes (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  session_id    UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-  song_id       UUID NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  session_id    UUID NOT NULL,
+  song_id       UUID NOT NULL,
   recorded_at   TIMESTAMPTZ NOT NULL,
   a             NUMERIC(8,1),
   b             NUMERIC(8,1),
@@ -202,10 +205,12 @@ CREATE TABLE takes (
   duration_sec  INTEGER NOT NULL CHECK (duration_sec >= 0),
   mime          TEXT NOT NULL CHECK (mime IN ('audio/mp4', 'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/aac')),
   size_bytes    BIGINT NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 52428800), -- 최대 50MB
-  storage       TEXT NOT NULL CHECK (storage IN ('gcs', 'supabase', 'drive')),
+  storage       TEXT NOT NULL CHECK (storage IN ('supabase', 'drive')),
   storage_key   TEXT NOT NULL,
   memo          TEXT NOT NULL DEFAULT '',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- 녹음의 사용자·세션·곡이 서로 같은 사용자, 같은 곡을 가리키도록 강제
+  FOREIGN KEY (user_id, session_id, song_id) REFERENCES sessions (user_id, id, song_id) ON DELETE CASCADE
 );
 CREATE INDEX takes_session_idx ON takes (session_id, recorded_at);
 CREATE INDEX takes_song_idx ON takes (song_id, recorded_at DESC);
@@ -277,6 +282,8 @@ CREATE TABLE notion_sync (
   last_push_at  TIMESTAMPTZ,
   last_pull_at  TIMESTAMPTZ,
   last_error    TEXT,
+  lease_until   TIMESTAMPTZ,    -- Push 워커 점유 만료 시각 (3.4절). NULL 또는 과거면 비어 있음
+  lease_owner   TEXT,           -- 점유한 워커 식별자 (인스턴스 ID + 난수)
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TRIGGER notion_sync_updated BEFORE UPDATE ON notion_sync FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -304,6 +311,19 @@ CREATE TABLE sync_outbox (
   done_at     TIMESTAMPTZ
 );
 CREATE INDEX sync_outbox_pending_idx ON sync_outbox (user_id, id) WHERE done_at IS NULL;
+
+-- ============================================================
+-- 8. storage_trash (지울 스토리지 파일 대기열)
+-- ============================================================
+-- 곡·녹음·계정 삭제 시 DB 행과 같은 트랜잭션에서 파일 키를 넣고, 커밋 후 즉시 + 1분 cron이 실제 파일을 지운다.
+-- 사용자 행이 지워져도 남아야 하므로 users FK를 걸지 않는다.
+CREATE TABLE storage_trash (
+  id           BIGSERIAL PRIMARY KEY,
+  storage_key  TEXT NOT NULL,       -- Supabase Storage 'takes' 버킷 경로
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
 ---
@@ -314,11 +334,13 @@ CREATE INDEX sync_outbox_pending_idx ON sync_outbox (user_id, id) WHERE done_at 
 다중 기기 동시 요청 시에도 `sessions` 행이 중복 생성되거나 시간이 유실되지 않도록 단일 트랜잭션 내에서 처리합니다.
 
 ```sql
--- 1. 곡 위치·구간·속도 갱신
+-- 1. 곡 위치·구간·속도 갱신 (소유 확인 겸용)
 UPDATE songs
    SET pos = :pos, a = :a, b = :b, rate = COALESCE(:rate, rate),
        last_date = GREATEST(COALESCE(last_date, :date), :date)
- WHERE id = :songId AND user_id = :userId;
+ WHERE id = :songId AND user_id = :userId
+ RETURNING id;
+-- 0행이면 남의 곡이거나 없는 곡: 롤백하고 404 SONG_NOT_FOUND. 아래 2·3번으로 가지 않는다
 
 -- 2. 이미 당일 세션이 존재하는지 먼저 UPDATE 시도
 UPDATE sessions
@@ -331,7 +353,7 @@ UPDATE sessions
  RETURNING id, seconds;
 
 -- 3. (2번 결과가 0행일 때)
---    addSeconds < 60 이면 INSERT 하지 않고 { kept = true } 반환.
+--    addSeconds < 60 이면 INSERT 하지 않고 { keep = true } 반환.
 --    addSeconds >= 60 이면 동시성 충돌 방지를 위해 ON CONFLICT DO UPDATE 실행:
 INSERT INTO sessions (user_id, song_id, date, seconds, loops, rate, a, b)
 VALUES (:userId, :songId, :date, :addSeconds, :addLoops, :rate, :a, :b)
@@ -353,11 +375,31 @@ SELECT take_quota_bytes FROM profiles WHERE id = :userId FOR UPDATE;
 
 SELECT COALESCE(SUM(size_bytes), 0) AS used_bytes
   FROM takes
- WHERE user_id = :userId AND storage IN ('gcs', 'supabase');
+ WHERE user_id = :userId AND storage = 'supabase';
 
 -- 애플리케이션에서 used_bytes + newFileSize > take_quota_bytes 이면
 -- TAKE_QUOTA_EXCEEDED (413) 예외 발생 및 롤백
 ```
+
+**업로드 순서 (파일과 DB 행이 어긋나지 않게):**
+1. 소유 확인(`songId`가 내 곡인지) + 잠금 없는 쿼터 사전 검사 → 초과면 업로드 전에 413.
+2. 서버가 `takeId`를 먼저 만들고 Storage `{userId}/{takeId}.{ext}`에 업로드 (DB 트랜잭션 밖, 오래 걸려도 잠금 없음).
+3. 짧은 트랜잭션: 위 `FOR UPDATE` 쿼터 재검사 → `ensureSession` → `takes` INSERT → Outbox 적재 → 커밋.
+4. 3번이 실패하면 방금 올린 파일을 지운다. 그 삭제마저 실패하면 `storage_trash`에 넣어 cron이 지운다.
+
+### 3.2.1 삭제 시 스토리지 파일 정리 (`storage_trash`)
+DB 행은 `ON DELETE CASCADE`로 지워지지만 Storage 파일은 DB 트랜잭션에 묶이지 않습니다. 그래서 삭제 트랜잭션 **안에서** 지울 파일 키를 `storage_trash`에 넣고, 커밋 뒤 즉시 삭제를 시도하며, 실패분은 1분 cron이 다시 지웁니다.
+```sql
+-- 곡 삭제 (DELETE /api/v1/songs/{id}) 트랜잭션
+INSERT INTO storage_trash (storage_key)
+SELECT storage_key FROM takes
+ WHERE user_id = :userId AND song_id = :songId AND storage = 'supabase';
+-- 노션 연동 중이면 곡과 그 세션 페이지 아카이브 이벤트 적재 (녹음 블록은 세션 페이지와 함께 아카이브됨)
+--   enqueue(song, :songId, 'delete'), 각 세션에 enqueue(session, :sessionId, 'delete')
+DELETE FROM songs WHERE id = :songId AND user_id = :userId;   -- sessions·takes CASCADE
+```
+- 녹음 1개 삭제·계정 삭제도 같은 방식으로 `storage_trash`를 거칩니다(계정 삭제는 `takes/{userId}/` 경로 전체).
+- Push 워커는 `delete` 처리에 성공하면 해당 `notion_links` 행을 지웁니다(`notion_links`는 여러 테이블을 가리켜 FK가 없으므로 앱이 정리).
 
 ### 3.3 Outbox 적재 중복 제거 및 무한 루프 방지 (`NotionSyncOutboxHelper`)
 DB 트리거에 숨겨진 전역 세션 변수(`current_setting('app.sync_source')`) 대신, **Kotlin 서비스 계층에서 명시적으로 Outbox 적재 함수를 호출**합니다.
@@ -376,12 +418,31 @@ SELECT :userId, :entity, :entityId, :op
 ```
 
 ### 3.4 Outbox 워커 동시 실행 제어 (`NotionPushWorker`)
-클라이언트의 즉시 Push 호출과 Cloud Scheduler의 1분 주기 배치 호출이 겹치더라도 같은 사용자의 작업이 두 번 실행되지 않도록 PostgreSQL 트랜잭션 Advisory Lock을 사용합니다.
+클라이언트의 즉시 Push 호출과 Cloud Scheduler의 1분 주기 배치 호출이 겹치더라도 같은 사용자의 작업이 두 번 실행되지 않도록 `notion_sync`의 **lease(점유 만료 시각)**를 씁니다.
+트랜잭션 Advisory Lock(`pg_try_advisory_xact_lock`)은 트랜잭션이 끝나면 풀리므로, 쓰려면 노션 HTTP 호출(최대 20MB+ 업로드)을 트랜잭션 안에서 해야 해 DB 연결을 오래 붙잡습니다. lease는 획득·해제만 짧은 트랜잭션으로 하고, 노션 호출은 트랜잭션 밖에서 합니다. 인스턴스가 중간에 죽어도 만료 시각이 지나면 다른 워커가 이어 받습니다.
 
 ```sql
--- 사용자별 해시 키로 Non-blocking Advisory Lock 획득 시도
-SELECT pg_try_advisory_xact_lock(hashtext(:userId::text));
--- false 반환 시 이미 다른 코루틴/인스턴스가 해당 사용자의 Outbox를 처리 중이므로 즉시 건너뜀
+-- 1. lease 획득 (0행이면 다른 워커가 처리 중 → 건너뜀)
+UPDATE notion_sync
+   SET lease_until = now() + interval '5 minutes', lease_owner = :worker
+ WHERE user_id = :userId AND enabled = true
+   AND (lease_until IS NULL OR lease_until < now())
+RETURNING user_id;
+
+-- 2. 대기열 한 건씩 (트랜잭션 밖에서 노션 호출 → 결과만 짧게 기록)
+SELECT id, entity, entity_id, op FROM sync_outbox
+ WHERE user_id = :userId AND done_at IS NULL AND attempts < 5
+ ORDER BY id LIMIT 20;
+UPDATE sync_outbox SET done_at = now() WHERE id = :id;                        -- 성공
+UPDATE sync_outbox SET attempts = attempts + 1, last_error = :err WHERE id = :id;  -- 실패
+
+-- 처리 중간마다 연장 (한 건 처리가 길어도 lease가 만료되지 않게)
+UPDATE notion_sync SET lease_until = now() + interval '5 minutes'
+ WHERE user_id = :userId AND lease_owner = :worker;
+
+-- 3. 해제
+UPDATE notion_sync SET lease_until = NULL, lease_owner = NULL, last_push_at = now()
+ WHERE user_id = :userId AND lease_owner = :worker;
 ```
 
 ---
