@@ -8,7 +8,9 @@
 ## 1. 공통 규칙
 
 ### 1.1 인증 및 헤더
-- **인증 방식:** `Authorization: Bearer <access_token>` (Google OAuth2 로그인 후 발급된 JWT 또는 Supabase Auth 호환 JWT)
+- **인증 방식:** `Authorization: Bearer <access_token>` — **Supabase Auth**(Google 공급자)가 발급한 access token(JWT). 서버는 토큰을 발급하지 않고 검증만 합니다(KC-D10).
+  - **검증:** 서명은 JWKS `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`(비대칭 서명 키, 캐시 후 `kid`로 선택), `iss` = `https://<project-ref>.supabase.co/auth/v1`, `aud` = `authenticated`, `exp` 미만료. `sub`가 `users.id`입니다. 실패하면 `401 UNAUTHORIZED`.
+  - **환경변수:** `SUPABASE_URL`(=`https://<project-ref>.supabase.co`). JWKS 주소와 `iss`는 이것으로 만듭니다.
 - **Content-Type:** 일반 요청/응답은 `application/json; charset=utf-8`, 오디오 직접 업로드는 `multipart/form-data`, ZIP 내보내기는 `application/zip`.
 - **CORS:** 환경변수 `ALLOWED_ORIGINS` (`https://hunseokc.github.io,http://localhost:3000`)에 등록된 Origin에 대해서만 CORS 헤더를 반환합니다(오류 응답 시에도 CORS 헤더 포함).
 
@@ -40,22 +42,10 @@
 
 ## 2. 인증 및 내 프로필 API (`Auth & Profile`)
 
-### 2.1 Google OAuth 로그인 콜백 / 토큰 교환
-- **`POST /api/v1/auth/google`** (또는 OAuth2 Redirect 흐름 `GET /api/v1/auth/google/callback`)
-- **설명:** Google OAuth 인가 코드(Authorization Code, PKCE) 또는 ID Token을 검증하고, 최초 로그인 시 `users` 및 `profiles` 행을 자동 생성(`FR-AUTH-2`)한 뒤 세션 JWT를 발급합니다.
-- **Response (`200 OK`):**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "refreshToken": "def50200...",
-  "expiresIn": 3600,
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "player@example.com",
-    "displayName": "player"
-  }
-}
-```
+### 2.1 로그인·로그아웃 (서버 API 없음)
+- **로그인:** 브라우저 `public/auth.js`가 supabase-js `signInWithOAuth({ provider: 'google', options: { redirectTo: <원래 페이지> } })`를 호출합니다. 토큰 발급·갱신(refresh)·저장은 supabase-js가 하며, `createClient` 옵션 `auth.storageKey = 'ulp:auth'`로 저장 키를 `ulp:` 규칙에 맞춥니다.
+- **로그아웃:** `supabase.auth.signOut()` 후 `ulp:keys`를 지웁니다(`FR-AUTH-1`).
+- **첫 로그인 프로필 생성(`FR-AUTH-2`):** 별도 가입 API 없이, 인증된 첫 요청에서 서버가 `users`(`id = sub`, `email`)와 `profiles`를 `INSERT ... ON CONFLICT (id) DO NOTHING`으로 만듭니다. 이메일이 바뀌었으면 `users.email`만 갱신합니다.
 
 ### 2.2 내 프로필 및 사용량 조회
 - **`GET /api/v1/me`**

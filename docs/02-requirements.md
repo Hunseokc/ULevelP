@@ -9,7 +9,7 @@
 
 | ID | 요구사항명 | 상세 설명 및 인수 조건 |
 | --- | --- | --- |
-| **FR-AUTH-1** | **Google OAuth 로그인 및 로그아웃** | • 상단 메뉴 `LOGIN` 클릭 시 Google OAuth 2.0 동의 화면을 거쳐 로그인하고 원래 보던 페이지로 복귀한다.<br>• 로그아웃 시 브라우저에 저장된 인증 토큰과 키 등록 캐시(`ulp:keys`)가 즉시 삭제된다. |
+| **FR-AUTH-1** | **Google 로그인(Supabase Auth) 및 로그아웃** | • 상단 메뉴 `LOGIN` 클릭 시 Supabase Auth의 Google 공급자로 Google 동의 화면을 거쳐 로그인하고 원래 보던 페이지로 복귀한다.<br>• 노션 임베드 iframe 안에서는 Google 로그인이 막히므로 로그인 버튼은 새 창(`target=_blank`)으로 연다.<br>• 로그아웃 시 브라우저에 저장된 인증 토큰과 키 등록 캐시(`ulp:keys`)가 즉시 삭제된다. |
 | **FR-AUTH-2** | **신규 가입 시 프로필 자동 생성** | • 최초 Google 로그인 시 `users` 및 `profiles` 테이블에 기본값(`role = 'user'`, `storage_provider = 'supabase'`, `take_quota_bytes = 209715200` [200MB])으로 행이 자동 생성된다. |
 | **FR-AUTH-3** | **운영 권한 및 쿼터 변조 방지** | • `profiles.role`(`user` / `owner`)과 `take_quota_bytes`는 서버 API(`PATCH /api/v1/me`) 요청 본문에 포함되더라도 무시·거부되며, 오직 DB 관리자만 변경할 수 있다.<br>• 기능 활성화 여부는 `role`이 아닌 키 등록 여부(`FR-KEY-GATE`)로만 판단한다. |
 | **FR-AUTH-4** | **계정 탈퇴 및 데이터 완전 삭제** | • `SETTING` → 계정 삭제 → 확인 문구 입력 시 `DELETE /api/v1/me`를 호출한다.<br>• 서버는 Supabase Storage(`takes/{userId}/*`)의 모든 오디오 파일, 암호화 보관된 외부 API 키, DB의 모든 하위 레코드(`songs`, `sessions`, `takes`, `notes`, `analysis_jobs`, `notion_sync`, `sync_outbox`)를 트랜잭션으로 영구 삭제한다.<br>• 사용자의 Google Drive에 이미 업로드된 파일은 본인 드라이브에 남는다는 점을 사전 안내한다. |
@@ -139,7 +139,7 @@
 | --- | --- | --- |
 | **보안 (XSS/CSP)** | **NFR-SEC-1** | • 모든 HTML 응답(또는 `<meta>`)에 엄격한 CSP를 적용한다. Cloud Run 서빙 시 `frame-ancestors 'none'`을 추가하여 Clickjacking을 원천 차단한다.<br>• 외부 텍스트(유튜브 제목, 노션 속성, Gemini 분석 결과, CSV 입력값)는 반드시 `textContent` 또는 `esc()` 이스케이프를 거쳐 렌더링하며, 외부 URL은 `safeUrl()`(`https:` 프로토콜만 허용)을 통과해야 한다(기존 X1 정적 테스트 및 X2 Playwright 페이로드 테스트 통과 필수). |
 | **보안 (인증/권한)** | **NFR-SEC-2** | • 모든 API 엔드포인트(공개 계산 API 및 `/api/health` 제외)는 유효한 JWT를 요구하며, 모든 DB 쿼리는 인증된 `userId`를 조건절에 강제한다.<br>• 타 사용자의 `songId`나 `sessionId`를 참조해 세션·녹음을 생성하려는 시도는 `403 Forbidden` 또는 `404 Not Found`로 차단한다(사용자 A/B 교차 침투 통합 테스트 필수). |
-| **보안 (시크릿)** | **NFR-SEC-3** | • 브라우저 `localStorage`에는 어떠한 API 키·토큰 원문도 저장하지 않는다(세션 JWT 제외).<br>• 모든 신규 로컬 스토리지 키는 `ulp:` 접두어를 사용하며, 동일 Origin의 타 앱 키(`pp-api`, `pp-key`, `sn-token`)를 읽지 않는다. |
+| **보안 (시크릿)** | **NFR-SEC-3** | • 브라우저 `localStorage`에는 어떠한 API 키·토큰 원문도 저장하지 않는다(supabase-js 세션 토큰 `ulp:auth` 제외).<br>• 모든 신규 로컬 스토리지 키는 `ulp:` 접두어를 사용하며, 동일 Origin의 타 앱 키(`pp-api`, `pp-key`, `sn-token`)를 읽지 않는다. |
 | **운영 / 비용 보호** | **NFR-OPS-1** | • **Rate Limiting:** Cloud Run 실행 비용 보호를 위해 Gemini 학습 노트 분석은 **사용자당 동시 실행 1건, 일 최대 20건**(`429 RATE_LIMITED`)으로 제한한다.<br>• 노션 수동/자동 Pull은 **사용자당 5분 간격**(`retryAfter` 반환)으로 제한한다. |
 | **디자인 / UX** | **NFR-UX-1** | • 모든 신규 화면(`log.html`, `note.html`, `settings.html` 개편)은 `public/styles.css` 색 토큰과 다음 규칙(웜 뉴트럴 배경, 명도 대비 강조, 파란색은 링크·근음 한정, 필 버튼, 직각 카드, 터치 타겟 최소 44px, 모바일 390px 가로 스크롤 없음)을 준수한다. |
 | **오프라인 복원력** | **NFR-UX-2** | • 연습 중 일시적으로 네트워크가 끊겨도 플레이어 재생과 연습 시간 카운트는 중단되지 않으며, 연결이 복구되면 누적된 미저장 연습 시간을 다음 자동 저장 요청에 합산하여 전송한다. |
