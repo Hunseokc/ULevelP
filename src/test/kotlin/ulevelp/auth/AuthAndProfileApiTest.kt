@@ -1,10 +1,12 @@
 package ulevelp.auth
 
+import com.sun.net.httpserver.HttpServer
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -22,6 +24,8 @@ import ulevelp.module
 import ulevelp.security.CryptoService
 import ulevelp.service.ProfileService
 import java.math.BigInteger
+import java.net.InetSocketAddress
+import java.net.URI
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
@@ -30,12 +34,16 @@ import java.security.interfaces.ECPublicKey
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.test.*
@@ -60,6 +68,7 @@ class AuthAndProfileApiTest {
         private lateinit var ecKeyPair: KeyPair
         private lateinit var wrongEcKeyPair: KeyPair
         private lateinit var rsaKeyPair: KeyPair
+        private lateinit var validJwksJson: String
         private lateinit var jwksProvider: JwksProvider
         private lateinit var authConfig: SupabaseAuthConfig
 
@@ -86,8 +95,18 @@ class AuthAndProfileApiTest {
             val ecPub = ecKeyPair.public as ECPublicKey
             val rsaPub = rsaKeyPair.public as RSAPublicKey
 
-            val jwksJson = buildJsonObject {
+            validJwksJson = buildJsonObject {
                 putJsonArray("keys") {
+                    // 불량 키가 함께 포함되어 있어도 개별 격리(runCatching)로 정상 키는 유지되어야 함 (리뷰 5번)
+                    addJsonObject {
+                        put("kty", "EC")
+                        put("crv", "P-256")
+                        put("alg", "ES256")
+                        put("use", "sig")
+                        put("kid", "corrupted-ec-key")
+                        put("x", "!!!not_base64_url!!!")
+                        put("y", "")
+                    }
                     addJsonObject {
                         put("kty", "EC")
                         put("crv", "P-256")
@@ -108,7 +127,7 @@ class AuthAndProfileApiTest {
                 }
             }.toString()
 
-            jwksProvider = StaticJwksProvider.fromJwksJson(jwksJson)
+            jwksProvider = StaticJwksProvider.fromJwksJson(validJwksJson)
             authConfig = SupabaseAuthConfig(
                 issuer = TEST_ISSUER,
                 audience = TEST_AUDIENCE,
@@ -121,6 +140,14 @@ class AuthAndProfileApiTest {
         @AfterAll
         fun tearDown() {
             if (::dataSource.isInitialized) {
+                runCatching {
+                    dataSource.connection.use { conn ->
+                        conn.createStatement().use { stmt ->
+                            stmt.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+                        }
+                        conn.commit()
+                    }
+                }
                 dataSource.close()
             }
         }
@@ -245,7 +272,7 @@ class AuthAndProfileApiTest {
     }
 
     @Test
-    fun `missing token, forged signature, expired token, wrong iss or aud, and alg confusion all return 401 UNAUTHORIZED`() = testApplication {
+    fun `missing token, forged signature, expired token, wrong iss or aud, alg confusion, and unknown v1 route`() = testApplication {
         configureTestApp()
         val userId = UUID.randomUUID().toString()
 
@@ -306,6 +333,82 @@ class AuthAndProfileApiTest {
             header(HttpHeaders.Authorization, "Bearer $mismatchAlgToken")
         }
         assertEquals(HttpStatusCode.Unauthorized, mismatchRes.status)
+
+        // 8. 존재하지 않는 /api/v1 경로 요청 시 인증/토큰 유무와 무관하게 404 NOT_FOUND 반환 (리뷰 9번)
+        val unknownV1Res = client.get("/api/v1/non-existent-endpoint")
+        assertEquals(HttpStatusCode.NotFound, unknownV1Res.status)
+        assertStandardError(unknownV1Res.bodyAsText(), 404, "NOT_FOUND")
+    }
+
+    @Test
+    fun `HttpJwksProvider caches keys and throttles retries on fetch failure using minRefreshInterval`() = runTest {
+        val requestCount = AtomicInteger(0)
+        val shouldFail = AtomicReference(false)
+
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/auth/v1/.well-known/jwks.json") { exchange ->
+            requestCount.incrementAndGet()
+            if (shouldFail.get()) {
+                exchange.sendResponseHeaders(500, -1)
+                exchange.close()
+            } else {
+                val bytes = validJwksJson.toByteArray(Charsets.UTF_8)
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(200, bytes.size.toLong())
+                exchange.responseBody.use { it.write(bytes) }
+            }
+        }
+        server.start()
+
+        try {
+            var currentInstant = FIXED_NOW
+            val mutableClock = object : Clock() {
+                override fun getZone(): ZoneId = ZoneOffset.UTC
+                override fun withZone(zone: ZoneId?): Clock = this
+                override fun instant(): Instant = currentInstant
+            }
+
+            val port = server.address.port
+            val provider = HttpJwksProvider(
+                jwksUri = URI("http://127.0.0.1:$port/auth/v1/.well-known/jwks.json"),
+                clock = mutableClock,
+                cacheTtl = Duration.ofSeconds(60),
+                minRefreshInterval = Duration.ofSeconds(10)
+            )
+
+            // 1. 첫 조회 -> HTTP 1회 호출 후 캐시
+            val key1 = provider.resolveKey(EC_KID)
+            assertNotNull(key1)
+            assertEquals(1, requestCount.get())
+
+            // 2. TTL 이내 재조회 -> 캐시 히트(HTTP 추가 호출 없음)
+            currentInstant = currentInstant.plusSeconds(30)
+            val key2 = provider.resolveKey(RSA_KID)
+            assertNotNull(key2)
+            assertEquals(1, requestCount.get())
+
+            // 3. TTL(60초) 만료 후 JWKS 서버 장애(500) 발생 -> 1회 재시도 후 실패 시각(lastAttemptAt) 기록
+            currentInstant = currentInstant.plusSeconds(35) // 총 +65초 (TTL 만료)
+            shouldFail.set(true)
+            val key3 = provider.resolveKey(EC_KID)
+            assertNotNull(key3, "Existing cached key should be returned as fallback when refresh fails")
+            assertEquals(2, requestCount.get())
+
+            // 4. 실패 직후 minRefreshInterval(10초) 이내 연속 요청 -> HTTP 재호출 없이 즉시 반환 (리뷰 3번)
+            currentInstant = currentInstant.plusSeconds(3)
+            provider.resolveKey(EC_KID)
+            provider.resolveKey("unknown-kid")
+            assertEquals(2, requestCount.get(), "Failed JWKS fetch must not retry within minRefreshInterval")
+
+            // 5. minRefreshInterval(10초) 경과 후 서버 복구 -> 정상 재조회
+            currentInstant = currentInstant.plusSeconds(10)
+            shouldFail.set(false)
+            val key4 = provider.resolveKey(EC_KID)
+            assertNotNull(key4)
+            assertEquals(3, requestCount.get())
+        } finally {
+            server.stop(0)
+        }
     }
 
     @Test
@@ -338,7 +441,7 @@ class AuthAndProfileApiTest {
     }
 
     @Test
-    fun `first authenticated request creates users and profiles and calculates takeUsedBytes and key summaries`() = testApplication {
+    fun `first authenticated request creates users and profiles and calculates takeUsedBytes and ulevelp-only key summaries`() = testApplication {
         configureTestApp()
         val userId = UUID.randomUUID()
         val token = signJwt(sub = userId.toString(), email = "player@example.com")
@@ -366,7 +469,13 @@ class AuthAndProfileApiTest {
         val masterKey = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 1).toByte() })
         val crypto = CryptoService.fromBase64Key(masterKey)
         val rawNotionSecret = "ntn_1234567890abcdefghijABCDEFGHIJ9a8b"
-        val encPayload = crypto.encryptProviderKey(userId, "notion", rawNotionSecret)
+        val encPayload = crypto.encryptProviderKey(userId, "notion", rawNotionSecret, appId = "ulevelp")
+        val otherAppGeminiPayload = crypto.encryptProviderKey(
+            userId,
+            "gemini",
+            "AIzaSyA1234567890abcdefghijk123456789ab",
+            appId = "guitar-practice"
+        )
         val songId = UUID.randomUUID()
         val sessionId = UUID.randomUUID()
         val now = OffsetDateTime.ofInstant(FIXED_NOW, ZoneOffset.UTC)
@@ -418,6 +527,16 @@ class AuthAndProfileApiTest {
                 it[keyVersion] = encPayload.keyVersion
                 it[hint] = encPayload.hint
             }
+            // 다른 앱(guitar-practice)에만 등록된 키는 ulevelp keys 요약에 대체 표시되면 안 됨 (리뷰 10번)
+            IntegrationsTable.insert {
+                it[IntegrationsTable.userId] = userId
+                it[appId] = "guitar-practice"
+                it[provider] = "gemini"
+                it[encryptedSecret] = otherAppGeminiPayload.encryptedSecret
+                it[iv] = otherAppGeminiPayload.iv
+                it[keyVersion] = otherAppGeminiPayload.keyVersion
+                it[hint] = otherAppGeminiPayload.hint
+            }
         }
 
         val rsaTokenWithNewEmail = signJwt(
@@ -437,9 +556,11 @@ class AuthAndProfileApiTest {
         assertEquals("new-email@example.com", secondJson["email"]?.jsonPrimitive?.content)
         assertEquals("player", secondJson["displayName"]?.jsonPrimitive?.content, "Existing displayName must not be overwritten")
         assertEquals(1_500_000L, secondJson["takeUsedBytes"]?.jsonPrimitive?.long, "Only supabase takes count toward quota")
-        val notionKeyObj = secondJson["keys"]!!.jsonObject["notion"]!!.jsonObject
+        val secondKeysObj = secondJson["keys"]!!.jsonObject
+        val notionKeyObj = secondKeysObj["notion"]!!.jsonObject
         assertEquals("9a8b", notionKeyObj["hint"]?.jsonPrimitive?.content)
         assertTrue(notionKeyObj["updatedAt"]?.jsonPrimitive?.content?.isNotBlank() == true)
+        assertTrue(secondKeysObj["gemini"] is JsonNull, "guitar-practice key must not be shown as ulevelp key")
     }
 
     @Test
@@ -503,7 +624,7 @@ class AuthAndProfileApiTest {
     }
 
     @Test
-    fun `user B cannot access or mutate user A data (0 rows and 404 NotFound) and DELETE me cascades all child tables while queuing storage_trash`() = testApplication {
+    fun `user B cannot access or mutate user A data (0 rows and 404 NotFound) and DELETE me cascades all child tables and blocks recreation`() = testApplication {
         configureTestApp()
         val userA = UUID.randomUUID()
         val userB = UUID.randomUUID()
@@ -642,7 +763,14 @@ class AuthAndProfileApiTest {
         val deleteJson = Json.parseToJsonElement(deleteRes.bodyAsText()).jsonObject
         assertEquals(true, deleteJson["ok"]?.jsonPrimitive?.boolean)
 
-        // 4. 계정 삭제 후 사용자 A의 모든 하위 테이블이 0행이고, supabase 녹음 파일 키만 storage_trash에 적재되었으며, 사용자 B는 유지됨을 검증
+        // 4. 탈퇴 직후 동일한 잔여 토큰(tokenA)으로 재요청 시 빈 프로필이 재생성되지 않고 401 UNAUTHORIZED로 차단됨 (리뷰 2번)
+        val afterDeleteRes = client.get("/api/v1/me") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.Unauthorized, afterDeleteRes.status)
+        assertStandardError(afterDeleteRes.bodyAsText(), 401, "UNAUTHORIZED")
+
+        // 5. 계정 삭제 후 사용자 A의 모든 하위 테이블이 0행이고, supabase 녹음 파일 키만 storage_trash에 적재되었으며, 사용자 B는 유지됨을 검증
         transaction(db) {
             assertEquals(0L, UsersTable.selectAll().where { UsersTable.id eq userA }.count())
             assertEquals(0L, ProfilesTable.selectAll().where { ProfilesTable.id eq userA }.count())
@@ -665,4 +793,3 @@ class AuthAndProfileApiTest {
         }
     }
 }
-

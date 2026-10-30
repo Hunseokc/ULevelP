@@ -57,7 +57,7 @@ class DatabaseMigrationAndIntegrityTest {
             dataSource = DatabaseFactory.createDataSource(config)
             val migrateResult = DatabaseFactory.migrate(dataSource)
             migrationsExecutedCount = migrateResult.migrationsExecuted
-            targetSchemaVersion = migrateResult.targetSchemaVersion ?: migrateResult.initialSchemaVersion
+            targetSchemaVersion = migrateResult.targetSchemaVersion
             println(
                 "[Flyway] success=${migrateResult.success}, " +
                     "migrationsExecuted=${migrateResult.migrationsExecuted}, " +
@@ -86,7 +86,7 @@ class DatabaseMigrationAndIntegrityTest {
     @Test
     fun `Flyway V1__init migration applies cleanly and creates all 12 tables`() {
         assertEquals("1", targetSchemaVersion, "Flyway target schema version should be 1")
-        assertTrue(migrationsExecutedCount >= 1 || targetSchemaVersion == "1", "At least V1__init.sql migration must have executed")
+        assertTrue(migrationsExecutedCount >= 1, "At least V1__init.sql migration must have executed")
         assertEquals(12, ALL_TABLES.size, "Exposed ALL_TABLES should contain 12 tables")
 
         val actualTables = mutableListOf<String>()

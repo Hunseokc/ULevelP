@@ -16,6 +16,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Serializable
 data class KeySummaryDto(
@@ -43,12 +44,9 @@ data class MeResponseDto(
     val keys: KeysStatusDto
 )
 
-@Serializable
-data class DeleteMeRequestDto(
-    val confirmText: String = ""
-)
-
 class ProfileService(private val db: Database?) {
+
+    private val deletedUserIds: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
 
     companion object {
         const val CONFIRM_DELETE_TEXT = "삭제합니다"
@@ -80,10 +78,32 @@ class ProfileService(private val db: Database?) {
     /**
      * 인증된 첫 요청 시 `users`와 `profiles`를 `INSERT ... ON CONFLICT (id) DO NOTHING`으로 보장하고,
      * 이메일이 변경된 경우 `users.email`만 갱신한다 (`docs/03-api-spec.md` 2.1절, `FR-AUTH-2`).
+     *
+     * - 이미 탈퇴(`deleteMe`)한 사용자의 잔여 토큰 요청은 재생성하지 않고 `401 UNAUTHORIZED`로 차단한다.
+     * - 기존 사용자는 단일 `SELECT`로 확인하여 이메일 변경이 없으면 쓰기 쿼리를 발생시키지 않는다.
      */
     suspend fun ensureUserAndProfile(user: AuthenticatedUser) {
+        if (user.id in deletedUserIds) {
+            throw UnauthorizedException("탈퇴 처리된 계정입니다.")
+        }
+
         val database = requireDb()
         DatabaseFactory.dbQuery(database) {
+            val existingEmail = (UsersTable innerJoin ProfilesTable)
+                .select(UsersTable.email)
+                .where { UsersTable.id eq user.id }
+                .singleOrNull()
+                ?.get(UsersTable.email)
+
+            if (existingEmail != null) {
+                if (user.email.isNotEmpty() && existingEmail != user.email) {
+                    UsersTable.update({ UsersTable.id eq user.id }) {
+                        it[email] = user.email
+                    }
+                }
+                return@dbQuery
+            }
+
             UsersTable.insertIgnore {
                 it[id] = user.id
                 it[email] = user.email
@@ -218,6 +238,7 @@ class ProfileService(private val db: Database?) {
      * 1) Supabase Storage 오디오 파일(`takes.storage = 'supabase'`) 키를 `storage_trash`에 적재
      * 2) 암호화된 외부 API 키(`integrations`) 삭제
      * 3) `users` 행 삭제 (`ON DELETE CASCADE`로 모든 하위 테이블 영구 삭제)
+     * 4) 삭제된 사용자 ID를 기록하여 잔여 JWT로 인한 빈 프로필 재생성을 차단
      */
     suspend fun deleteMe(userId: UUID, confirmText: String) {
         if (confirmText != CONFIRM_DELETE_TEXT) {
@@ -240,6 +261,9 @@ class ProfileService(private val db: Database?) {
             IntegrationsTable.deleteWhere { IntegrationsTable.userId eq userId }
             UsersTable.deleteWhere { UsersTable.id eq userId }
         }
+
+        // TODO(Supabase Auth Admin): 운영 환경에서 Supabase Auth 사용자 삭제 연동 전까지 잔여 토큰을 통한 프로필 재생성을 차단
+        deletedUserIds.add(userId)
     }
 
     /**
@@ -305,18 +329,15 @@ class ProfileService(private val db: Database?) {
 
         val integrationRows = IntegrationsTable
             .select(
-                IntegrationsTable.appId,
                 IntegrationsTable.provider,
                 IntegrationsTable.hint,
                 IntegrationsTable.updatedAt
             )
-            .where { IntegrationsTable.userId eq userId }
-            .toList()
+            .where { (IntegrationsTable.userId eq userId) and (IntegrationsTable.appId eq "ulevelp") }
+            .associateBy { it[IntegrationsTable.provider] }
 
         fun findKeySummary(providerName: String): KeySummaryDto? {
-            val matched = integrationRows.filter { it[IntegrationsTable.provider] == providerName }
-            val chosen = matched.find { it[IntegrationsTable.appId] == "ulevelp" } ?: matched.firstOrNull()
-            return chosen?.let {
+            return integrationRows[providerName]?.let {
                 KeySummaryDto(
                     hint = it[IntegrationsTable.hint],
                     updatedAt = formatTimestamp(it[IntegrationsTable.updatedAt])
@@ -341,4 +362,3 @@ class ProfileService(private val db: Database?) {
         )
     }
 }
-

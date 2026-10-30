@@ -1,5 +1,9 @@
 package ulevelp.auth
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import ulevelp.api.UnauthorizedException
 import java.math.BigInteger
@@ -46,7 +50,7 @@ data class JwkKey(
 }
 
 fun interface JwksProvider {
-    fun resolveKey(kid: String): JwkKey?
+    suspend fun resolveKey(kid: String): JwkKey?
 }
 
 /**
@@ -55,7 +59,7 @@ fun interface JwksProvider {
 class StaticJwksProvider(keys: List<JwkKey>) : JwksProvider {
     private val keyMap: Map<String, JwkKey> = keys.associateBy { it.kid }
 
-    override fun resolveKey(kid: String): JwkKey? = keyMap[kid]
+    override suspend fun resolveKey(kid: String): JwkKey? = keyMap[kid]
 
     companion object {
         fun fromJwksJson(jwksJson: String): StaticJwksProvider =
@@ -66,6 +70,10 @@ class StaticJwksProvider(keys: List<JwkKey>) : JwksProvider {
 /**
  * Supabase JWKS 엔드포인트(`https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`)에서
  * 공개키를 조회하고 메모리에 캐싱하는 Provider.
+ *
+ * - HTTP 호출은 `withContext(Dispatchers.IO)`에서 수행하여 Ktor 작업 스레드를 블로킹하지 않는다.
+ * - 성공 시각(`lastFetchedAt`)과 시도 시각(`lastAttemptAt`)을 분리하여, 조회 실패 시에도
+ *   `minRefreshInterval` 동안 재조회를 억제한다.
  */
 class HttpJwksProvider(
     private val jwksUri: URI,
@@ -77,39 +85,54 @@ class HttpJwksProvider(
         .build()
 ) : JwksProvider {
 
+    private val refreshMutex = Mutex()
+
     @Volatile
     private var cachedKeys: Map<String, JwkKey> = emptyMap()
 
     @Volatile
     private var lastFetchedAt: Instant = Instant.EPOCH
 
-    override fun resolveKey(kid: String): JwkKey? {
+    @Volatile
+    private var lastAttemptAt: Instant = Instant.EPOCH
+
+    override suspend fun resolveKey(kid: String): JwkKey? {
         val now = clock.instant()
         val currentMap = cachedKeys
-        val isExpired = Duration.between(lastFetchedAt, now) >= cacheTtl
+        val isExpired = lastFetchedAt == Instant.EPOCH || Duration.between(lastFetchedAt, now) >= cacheTtl
 
         if (!isExpired) {
             currentMap[kid]?.let { return it }
         }
 
-        synchronized(this) {
+        if (lastAttemptAt != Instant.EPOCH && Duration.between(lastAttemptAt, now) < minRefreshInterval) {
+            return currentMap[kid]
+        }
+
+        return refreshMutex.withLock {
             val nowInside = clock.instant()
-            val expiredInside = Duration.between(lastFetchedAt, nowInside) >= cacheTtl
+            val expiredInside = lastFetchedAt == Instant.EPOCH || Duration.between(lastFetchedAt, nowInside) >= cacheTtl
             if (!expiredInside) {
-                cachedKeys[kid]?.let { return it }
-                if (Duration.between(lastFetchedAt, nowInside) < minRefreshInterval) {
-                    return null
-                }
+                cachedKeys[kid]?.let { return@withLock it }
             }
-            return runCatching {
-                val req = HttpRequest.newBuilder(jwksUri)
-                    .timeout(Duration.ofSeconds(5))
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build()
-                val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
-                if (res.statusCode() in 200..299) {
-                    val parsed = JwksParser.parseJwks(res.body()).associateBy { it.kid }
+            if (lastAttemptAt != Instant.EPOCH && Duration.between(lastAttemptAt, nowInside) < minRefreshInterval) {
+                return@withLock cachedKeys[kid]
+            }
+
+            lastAttemptAt = nowInside
+
+            runCatching {
+                val body = withContext(Dispatchers.IO) {
+                    val req = HttpRequest.newBuilder(jwksUri)
+                        .timeout(Duration.ofSeconds(5))
+                        .header("Accept", "application/json")
+                        .GET()
+                        .build()
+                    val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                    if (res.statusCode() in 200..299) res.body() else null
+                }
+                if (body != null) {
+                    val parsed = JwksParser.parseJwks(body).associateBy { it.kid }
                     cachedKeys = parsed
                     lastFetchedAt = nowInside
                     parsed[kid]
@@ -125,41 +148,52 @@ class HttpJwksProvider(
 
 /**
  * RFC 7517 JWK Set 파서 (ES256 P-256 및 RS256 지원).
+ * 개별 키 파싱 오류는 키 단위로 격리(`runCatching`)하여 불량 키 1개가 전체 JWKS를 무효화하지 않도록 한다.
  */
 object JwksParser {
     private val urlDecoder = Base64.getUrlDecoder()
 
     fun parseJwks(jwksJson: String): List<JwkKey> {
-        val root = Json.parseToJsonElement(jwksJson).jsonObject
-        val keysArray = root["keys"]?.jsonArray ?: return emptyList()
+        val root = runCatching { Json.parseToJsonElement(jwksJson).jsonObject }.getOrNull()
+            ?: return emptyList()
+        val keysArray = root["keys"] as? JsonArray ?: return emptyList()
         val result = mutableListOf<JwkKey>()
 
         for (elem in keysArray) {
-            val obj = elem as? JsonObject ?: continue
-            val use = obj["use"]?.jsonPrimitive?.contentOrNull
-            if (use != null && use != "sig") continue
+            val parsedKey = runCatching {
+                val obj = elem as? JsonObject ?: return@runCatching null
+                val use = obj["use"]?.jsonPrimitive?.contentOrNull
+                if (use != null && use != "sig") return@runCatching null
 
-            val kid = obj["kid"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: continue
-            val kty = obj["kty"]?.jsonPrimitive?.contentOrNull ?: continue
-            val alg = obj["alg"]?.jsonPrimitive?.contentOrNull
+                val kid = obj["kid"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                    ?: return@runCatching null
+                val kty = obj["kty"]?.jsonPrimitive?.contentOrNull
+                    ?: return@runCatching null
+                val alg = obj["alg"]?.jsonPrimitive?.contentOrNull
 
-            when (kty) {
-                "EC" -> {
-                    val crv = obj["crv"]?.jsonPrimitive?.contentOrNull
-                    if (crv != "P-256") continue
-                    if (alg != null && alg != "ES256") continue
-                    val xStr = obj["x"]?.jsonPrimitive?.contentOrNull ?: continue
-                    val yStr = obj["y"]?.jsonPrimitive?.contentOrNull ?: continue
-                    val pubKey = buildEcP256PublicKey(xStr, yStr)
-                    result.add(JwkKey(kid = kid, kty = "EC", alg = "ES256", publicKey = pubKey))
+                when (kty) {
+                    "EC" -> {
+                        val crv = obj["crv"]?.jsonPrimitive?.contentOrNull
+                        if (crv != "P-256") return@runCatching null
+                        if (alg != null && alg != "ES256") return@runCatching null
+                        val xStr = obj["x"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+                        val yStr = obj["y"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+                        val pubKey = buildEcP256PublicKey(xStr, yStr)
+                        JwkKey(kid = kid, kty = "EC", alg = "ES256", publicKey = pubKey)
+                    }
+                    "RSA" -> {
+                        if (alg != null && alg != "RS256") return@runCatching null
+                        val nStr = obj["n"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+                        val eStr = obj["e"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+                        val pubKey = buildRsaPublicKey(nStr, eStr)
+                        JwkKey(kid = kid, kty = "RSA", alg = "RS256", publicKey = pubKey)
+                    }
+                    else -> null
                 }
-                "RSA" -> {
-                    if (alg != null && alg != "RS256") continue
-                    val nStr = obj["n"]?.jsonPrimitive?.contentOrNull ?: continue
-                    val eStr = obj["e"]?.jsonPrimitive?.contentOrNull ?: continue
-                    val pubKey = buildRsaPublicKey(nStr, eStr)
-                    result.add(JwkKey(kid = kid, kty = "RSA", alg = "RS256", publicKey = pubKey))
-                }
+            }.getOrNull()
+
+            if (parsedKey != null) {
+                result.add(parsedKey)
             }
         }
         return result
@@ -168,6 +202,9 @@ object JwksParser {
     private fun buildEcP256PublicKey(xBase64Url: String, yBase64Url: String): ECPublicKey {
         val xBytes = urlDecoder.decode(xBase64Url)
         val yBytes = urlDecoder.decode(yBase64Url)
+        if (xBytes.isEmpty() || yBytes.isEmpty()) {
+            throw IllegalArgumentException("Empty EC coordinate")
+        }
         val point = ECPoint(BigInteger(1, xBytes), BigInteger(1, yBytes))
         val params = AlgorithmParameters.getInstance("EC").apply {
             init(ECGenParameterSpec("secp256r1"))
@@ -180,6 +217,9 @@ object JwksParser {
     private fun buildRsaPublicKey(nBase64Url: String, eBase64Url: String): RSAPublicKey {
         val nBytes = urlDecoder.decode(nBase64Url)
         val eBytes = urlDecoder.decode(eBase64Url)
+        if (nBytes.isEmpty() || eBytes.isEmpty()) {
+            throw IllegalArgumentException("Empty RSA modulus or exponent")
+        }
         val keySpec = RSAPublicKeySpec(BigInteger(1, nBytes), BigInteger(1, eBytes))
         return KeyFactory.getInstance("RSA").generatePublic(keySpec) as RSAPublicKey
     }
@@ -208,13 +248,6 @@ data class SupabaseAuthConfig(
 
 /**
  * Supabase Auth access token(JWT) 검증기 (`docs/03-api-spec.md` 1.1절, `KC-D10`).
- *
- * - 허용 알고리즘: 비대칭 서명 `ES256`, `RS256`만 허용 (`none`, `HS256` 등 거부)
- * - `kid`로 JWKS 공개키 선택 및 암호학적 서명 검증
- * - `iss` = `https://<project-ref>.supabase.co/auth/v1`
- * - `aud` = `authenticated`
- * - `exp` 미만료 검증 (`nbf` 존재 시 함께 검증)
- * - `sub` = `users.id` (UUID)
  */
 class SupabaseJwtVerifier(private val config: SupabaseAuthConfig) {
 
@@ -223,7 +256,7 @@ class SupabaseJwtVerifier(private val config: SupabaseAuthConfig) {
         private val urlDecoder = Base64.getUrlDecoder()
     }
 
-    fun verifyBearerHeader(authHeader: String?): AuthenticatedUser {
+    suspend fun verifyBearerHeader(authHeader: String?): AuthenticatedUser {
         if (authHeader.isNullOrBlank()) {
             throw UnauthorizedException("Authorization 헤더가 누락되었습니다.")
         }
@@ -238,7 +271,7 @@ class SupabaseJwtVerifier(private val config: SupabaseAuthConfig) {
         return verifyToken(token)
     }
 
-    fun verifyToken(token: String): AuthenticatedUser {
+    suspend fun verifyToken(token: String): AuthenticatedUser {
         val parts = token.split('.')
         if (parts.size != 3 || parts.any { it.isEmpty() }) {
             throw UnauthorizedException("올바르지 않은 JWT 형식입니다.")
@@ -372,4 +405,3 @@ class SupabaseJwtVerifier(private val config: SupabaseAuthConfig) {
         }
     }
 }
-

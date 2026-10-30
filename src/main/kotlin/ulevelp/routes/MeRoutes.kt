@@ -11,6 +11,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import ulevelp.api.InvalidInputException
+import ulevelp.auth.SupabaseAuthPlugin
+import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.auth.requireAuthUser
 import ulevelp.service.ProfileService
 
@@ -28,8 +30,16 @@ private suspend fun ApplicationCall.parseJsonObjectBody(): JsonObject {
         ?: throw InvalidInputException("요청 본문은 JSON 객체여야 합니다.")
 }
 
-fun Route.registerMeRoutes(profileService: ProfileService) {
+fun Route.registerMeRoutes(
+    jwtVerifier: SupabaseJwtVerifier?,
+    profileService: ProfileService
+) {
     route("/me") {
+        install(SupabaseAuthPlugin) {
+            this.jwtVerifier = jwtVerifier
+            this.profileService = profileService
+        }
+
         get {
             val user = call.requireAuthUser()
             val me = profileService.getMe(user.id)
@@ -61,4 +71,3 @@ fun Route.registerMeRoutes(profileService: ProfileService) {
         }
     }
 }
-
