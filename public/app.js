@@ -519,7 +519,7 @@
   }
   $('cc-all').addEventListener('toggle', drawAllDom);
 
-  // ================= 4. 우기기 =================
+  // ================= 4. 코드 재해석 =================
   const PRESETS = [
     { id: 'p1', label: '모양 1', frets: [-1, -1, 4, 2, 2, 4] },
     { id: 'p2', label: '모양 2 (4도 쌓기)', frets: [-1, -1, 7, 7, 8, 8] },
@@ -555,7 +555,7 @@
     }));
     $('ri-shape').innerHTML = notes.length ? box(degNotes(notes, sel), { label: '현재 모양' }) + '<div class="mono">' + fretText(notes) + '</div><div class="mono dimtxt">' + notes.map((n) => NOTE[CT.pc(n.pitch)]).join(' ') + '</div>' : '<div class="empty">지판을 눌러 줄마다 한 음씩 찍으세요.</div>';
     const groups = CT.FAM.map((F) => ({ F, items: list.map((x, i) => Object.assign({ i }, x)).filter((x) => x.fam === F.id) })).filter((g) => g.items.length);
-    $('ri-list').innerHTML = notes.length < 3 ? '<div class="empty">3음 이상 찍으면 해석이 나와요.</div>' : !groups.length ? '<div class="empty">메이저·마이너·도미넌트·서스·하프디미니시·디미니시 어느 쪽으로도 우기기 어려운 배열이에요. 음 하나를 옮겨 보세요.</div>' :
+    $('ri-list').innerHTML = notes.length < 3 ? '<div class="empty">3음 이상 찍으면 해석이 나와요.</div>' : !groups.length ? '<div class="empty">메이저·마이너·도미넌트·서스·하프디미니시·디미니시 어느 쪽으로도 해석하기 어려운 배열이에요. 음 하나를 옮겨 보세요.</div>' :
       groups.map((g) => '<div class="fam"><h3 class="h3">' + g.F.label + ' 관점</h3>' + g.items.map((x) =>
         '<button type="button" class="interp' + (ri.pick === x.i ? ' on' : '') + '" data-i="' + x.i + '"><b>' + esc(x.name) + '</b>' +
         '<span class="role">' + (x.key != null ? NOTE[x.key] + (x.keyMinor ? ' 마이너' : '') + ' 키의 ' + esc(x.role) : esc(x.role)) + '</span>' +
@@ -588,7 +588,7 @@
       const name = NOTE[ro.root] + it.name.slice(NOTE[it.root].length);
       return { ro, it, notes: tn, name, d };
     });
-    $('ri-swap').innerHTML = notes.length < 3 ? '' : swapPlan.map((p) => '<figure class="cell">' + (p.none ? '<div class="na">이 모양은 ' + p.ro.r + '로 우기기 어려움</div>' :
+    $('ri-swap').innerHTML = notes.length < 3 ? '' : swapPlan.map((p) => '<figure class="cell">' + (p.none ? '<div class="na">이 모양은 ' + p.ro.r + '로 해석하기 어려움</div>' :
       box(degNotes(p.notes, p.it), { label: p.name })) + '<figcaption><b>' + p.ro.r + (p.none ? '' : ' · ' + esc(p.name)) + '</b><span>' + (p.none ? '' : fretText(p.notes)) + '</span><em>' + (p.none ? '' : (p.d === 0 ? '제자리' : (p.d > 0 ? '+' : '') + p.d + '프렛 이동')) + '</em></figcaption></figure>').join('');
   }
   $('ri-key').addEventListener('change', (e) => { ri.key = +e.target.value; drawReint(); });
@@ -620,7 +620,7 @@
     if (Math.random() < 0.5) {
       const valid = new Set(list.filter((x) => x.fam === it.fam).map((x) => x.root));
       const wrong = shuffle([...Array(12).keys()].filter((r) => !valid.has(r))).slice(0, 3);
-      q = { notes, text: '이 모양을 ' + it.famLabel + ' 코드로 우기려면 근음은?', opts: shuffle([it.root].concat(wrong)).map((r) => ({ label: NOTE[r], ok: r === it.root })), explain: it.name + ' · ' + notes.map((n, k) => (6 - n.s) + '번줄 ' + it.degs[k]).reverse().join(', ') };
+      q = { notes, text: '이 모양을 ' + it.famLabel + ' 코드로 읽으려면 근음은?', opts: shuffle([it.root].concat(wrong)).map((r) => ({ label: NOTE[r], ok: r === it.root })), explain: it.name + ' · ' + notes.map((n, k) => (6 - n.s) + '번줄 ' + it.degs[k]).reverse().join(', ') };
     } else {
       const k = Math.floor(Math.random() * notes.length);
       q = { notes, text: '이 모양을 ' + it.name + '(으)로 볼 때 ' + it.degs[k] + ' 역할을 하는 줄은?', opts: shuffle(notes.map((n, j) => ({ label: (6 - n.s) + '번줄', ok: j === k || it.degs[j] === it.degs[k] }))), explain: notes.map((n, j) => (6 - n.s) + '번줄 ' + it.degs[j]).reverse().join(', ') };

@@ -19,7 +19,7 @@
   $('go').addEventListener('submit', (e) => { e.preventDefault(); pick(); if (!$('goPick').hidden) $('goPlay').click(); });
 
   // ---------- 코드 연습: 탭 목록, 마지막으로 쓴 탭 표시 ----------
-  const MODES = [['scale', '스케일 연습'], ['tone', '코드톤 지도'], ['matrix', '보이싱 매트릭스'], ['circle', '탑노트 5도권'], ['reint', '우기기'], ['tf', '2-5-1 탐색']];
+  const MODES = [['scale', '스케일 연습'], ['tone', '코드톤 지도'], ['matrix', '보이싱 매트릭스'], ['circle', '탑노트 5도권'], ['reint', '코드 재해석'], ['tf', '2-5-1 탐색']];
   const last = raw.get('ulp:tab');
   $('modes').innerHTML = MODES.map(([id, name], i) =>
     '<li' + (id === last ? ' class="cur"' : '') + '><a href="chords.html#' + encodeURIComponent(id) + '"><span class="t">' + (i + 1) + ' · ' + esc(name) + '</span>' +

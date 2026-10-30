@@ -126,7 +126,7 @@ const routes = {
     };
   },
 
-  // 음 배열 재해석 (우기기). frets=x,x,4,2,2,4 (6번줄부터)
+  // 음 배열 코드 재해석. frets=x,x,4,2,2,4 (6번줄부터)
   '/api/interpret': (q) => {
     const raw = (q.get('frets') || '').split(/[,\s]+/).filter(Boolean);
     if (raw.length !== 6) throw new BadRequest('frets 는 6번줄부터 6개 값입니다. 예: x,x,4,2,2,4');

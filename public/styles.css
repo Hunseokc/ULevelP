@@ -144,7 +144,7 @@ svg.wheel .wn.nxt circle { stroke: var(--accent); stroke-dasharray: 3 2; stroke-
 svg.wheel .wn.bad text { fill: var(--muted); }
 svg.wheel .wc { font-size: 13px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
 svg.wheel .wc2 { font-size: 15px; font-weight: 700; fill: var(--accent-text); text-anchor: middle; font-family: var(--font-mono); }
-/* 우기기 */
+/* 코드 재해석 */
 .ri-grid { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .ri-shape { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .fam { display: flex; flex-direction: column; gap: 6px; }
