@@ -889,4 +889,90 @@ class TakeApiTest {
         val takesCount = transaction(db) { TakesTable.selectAll().count() }
         assertEquals(0, takesCount)
     }
+
+    @Test
+    fun `T19 커밋 완료 후 취소 발생 시 이미 커밋된 녹음의 스토리지 파일 보존 검증`() = runBlocking {
+        val takeService = TakeService(db, fake)
+        val songUuid = UUID.randomUUID()
+        transaction(db) {
+            UsersTable.insert {
+                it[id] = uidA
+                it[email] = "commit-cancel@example.com"
+            }
+            ProfilesTable.insert {
+                it[id] = uidA
+                it[takeQuotaBytes] = 200 * 1024 * 1024L
+            }
+            SongsTable.insert {
+                it[id] = songUuid
+                it[userId] = uidA
+                it[videoId] = "dQw4w9WgXcQ"
+                it[title] = "Commit Cancel Test"
+                it[artist] = "Artist"
+            }
+        }
+
+        val input = TakeUploadInput(
+            songId = songUuid,
+            date = today,
+            recordedAt = OffsetDateTime.now(ZoneOffset.UTC),
+            a = null,
+            b = null,
+            rate = null,
+            durationSec = 10,
+            mime = "audio/mp4",
+            bytes = ByteArray(500)
+        )
+
+        var uploadedKey: String? = null
+        var job: Job? = null
+        fake.onUploadSuccess = { key ->
+            uploadedKey = key
+            // 트랜잭션 B가 DB에 먼저 커밋된 후 취소가 발생한 상황 시뮬레이션:
+            // DB에 동일 key를 가진 take 행을 사전 등록
+            val preSessionId = UUID.randomUUID()
+            transaction(db) {
+                SessionsTable.insert {
+                    it[id] = preSessionId
+                    it[userId] = uidA
+                    it[songId] = songUuid
+                    it[date] = today
+                    it[seconds] = 0
+                    it[loops] = 0
+                }
+                TakesTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[userId] = uidA
+                    it[sessionId] = preSessionId
+                    it[songId] = songUuid
+                    it[recordedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                    it[durationSec] = 10
+                    it[mime] = "audio/mp4"
+                    it[sizeBytes] = 500L
+                    it[storage] = "supabase"
+                    it[storageKey] = key
+                    it[memo] = ""
+                }
+            }
+            job?.cancel(CancellationException("Disconnected right after commit"))
+        }
+
+        val deferred = async {
+            takeService.upload(uidA, input)
+        }
+        job = deferred
+
+        assertFailsWith<CancellationException> {
+            deferred.await()
+        }
+
+        assertNotNull(uploadedKey)
+        // DB에 이미 커밋된 행이 있으므로 fake.delete가 호출되지 않고 파일이 보존되어야 함
+        assertTrue(fake.deleted.isEmpty(), "이미 커밋된 녹음 파일은 delete되지 않아야 합니다.")
+        assertTrue(fake.objects.containsKey(uploadedKey), "스토리지에 파일이 보존되어 있어야 합니다.")
+
+        // storage_trash에도 등록되지 않아야 함
+        val trashCount = transaction(db) { StorageTrashTable.selectAll().count() }
+        assertEquals(0, trashCount, "storage_trash에 들어가지 않아야 합니다.")
+    }
 }

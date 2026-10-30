@@ -135,6 +135,16 @@ class TakeService(
         key: String
     ) {
         withContext(NonCancellable) {
+            val committed = runCatching {
+                DatabaseFactory.dbQuery(database) {
+                    TakesTable.select(TakesTable.id).where { TakesTable.storageKey eq key }.limit(1).any()
+                }
+            }.getOrDefault(false)
+            if (committed) {
+                log.info("트랜잭션이 이미 커밋되었으므로 스토리지 파일($key)을 보존합니다.")
+                return@withContext
+            }
+
             try {
                 client.delete(key)
             } catch (delEx: Throwable) {

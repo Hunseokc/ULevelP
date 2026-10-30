@@ -221,7 +221,20 @@ BUILD SUCCESSFUL in 24s
   - `개발산출물/주니어_체크리스트.md`에 2단계 보상 시 `NonCancellable` 사용 규칙, 정리/실패 결과 식별자 배타성 단언 규칙, 응답 빌더 통일 및 미사용 import 금지 규칙 추가.
 - **CI T18 실패 해결 (Exposed `newSuspendedTransaction` 부모 Job 단절 방지):**
   - Exposed의 `newSuspendedTransaction(Dispatchers.IO, db)`는 인자로 넘겨진 디스패처 컨텍스트만으로 내부 `TransactionScope`를 생성하여 호출자의 부모 `Job` 컨텍스트가 상실되고, 이로 인해 부모 코루틴 취소 시에도 트랜잭션이 롤백되지 않고 커밋되는 문제가 발생했습니다.
-  - `DatabaseFactory.dbQuery`를 `withContext(Dispatchers.IO) { newSuspendedTransaction(db = db) { currentCoroutineContext().ensureActive(); val res = block(); currentCoroutineContext().ensureActive(); res } }`로 개선하여, 부모 Job 계층 구조를 보존하고 취소 발생 시 트랜잭션이 안전하게 롤백되도록 수정했습니다.
+  - `DatabaseFactory.dbQuery`를 `withContext(Dispatchers.IO) { newSuspendedTransaction(db = db) { currentCoroutineContext().ensureActive(); val res = block(); currentCoroutineContext().ensureActive(); res } }`로 개선하여, 부모 Job 계층 구조를 보존하고 트랜잭션 진입 전/중 취소 발생 시 안전하게 롤백되도록 수정했습니다.
+
+---
+
+## 8. PR #12 시니어 2차 리뷰 반영 내역
+
+- **1번 (커밋 완료 후 취소 발생 시 이미 커밋된 파일 오삭제 방지):**
+  - `TakeService.kt`의 `cleanupUploadedFile`에서 `withContext(NonCancellable)` 내부 진입 직후 DB 조회를 통해 `TakesTable.select(TakesTable.id).where { TakesTable.storageKey eq key }.limit(1).any()`로 이미 커밋된 녹음인지 확인.
+  - 만약 이미 DB에 커밋된 녹음(`committed == true`)이라면 스토리지 파일 삭제(`client.delete`) 및 trash 등록을 건너뛰고 안전하게 보존하도록 방어.
+  - 신규 통합 테스트 `T19 커밋 완료 후 취소 발생 시 이미 커밋된 녹음의 스토리지 파일 보존 검증` 추가 및 검증 완료.
+- **2번 (T18 검증 범위 명확화):**
+  - T18은 "트랜잭션 B 시작 전 취소 발생 시 NonCancellable 스토리지 정리 보장"을 검증함을 명확히 기술.
+- **3번 (체크리스트 일반화 보강):**
+  - `개발산출물/주니어_체크리스트.md`에 "`CancellationException`은 롤백을 뜻하지 않는다. 커밋 직후에도 취소가 올 수 있으므로, 외부 자원을 정리하기 전에 DB에 이미 커밋된 기록이 있는지 확인한다" 항목 보강.
 
 
 
