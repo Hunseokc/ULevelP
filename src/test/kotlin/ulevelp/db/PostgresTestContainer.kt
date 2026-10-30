@@ -15,6 +15,7 @@ object PostgresTestContainer {
     private const val DB_NAME = "ulevelp_test"
     private const val DB_USER = "ulp_test"
     private const val DB_PASS = "ulp_test_pw"
+    private val CONTAINER_ID_REGEX = Regex("^[0-9a-f]{12,64}$")
 
     @Volatile
     private var cachedConfig: DatabaseConfig? = null
@@ -36,14 +37,19 @@ object PostgresTestContainer {
             return cfg
         }
 
-        val containerId = runCommand(
+        val runOutput = runCommand(
             "docker", "run", "-d", "--rm",
             "-p", "127.0.0.1:0:5432",
             "-e", "POSTGRES_DB=$DB_NAME",
             "-e", "POSTGRES_USER=$DB_USER",
             "-e", "POSTGRES_PASSWORD=$DB_PASS",
             IMAGE
-        ).trim()
+        )
+        val containerId = runOutput
+            .lineSequence()
+            .map { it.trim() }
+            .lastOrNull { CONTAINER_ID_REGEX.matches(it) }
+            ?: error("Could not obtain container ID from docker run output: $runOutput")
 
         Runtime.getRuntime().addShutdownHook(
             Thread {
@@ -59,7 +65,7 @@ object PostgresTestContainer {
         val portOutput = runCommand("docker", "port", containerId, "5432/tcp").trim()
         val hostPort = portOutput
             .lineSequence()
-            .firstOrNull()
+            .firstOrNull { it.isNotBlank() }
             ?.substringAfterLast(':')
             ?.trim()
             ?.toIntOrNull()
@@ -80,7 +86,7 @@ object PostgresTestContainer {
     }
 
     private fun waitUntilReady(jdbcUrl: String, user: String, pass: String) {
-        val deadline = System.currentTimeMillis() + 30_000L
+        val deadline = System.currentTimeMillis() + 60_000L
         var lastError: Throwable? = null
         while (System.currentTimeMillis() < deadline) {
             try {
@@ -96,7 +102,7 @@ object PostgresTestContainer {
                 Thread.sleep(250)
             }
         }
-        throw IllegalStateException("PostgreSQL test container did not become ready in 30s: $jdbcUrl", lastError)
+        throw IllegalStateException("PostgreSQL test container did not become ready in 60s: $jdbcUrl", lastError)
     }
 
     private fun runCommand(vararg command: String): String {
@@ -104,11 +110,10 @@ object PostgresTestContainer {
             .redirectErrorStream(true)
             .start()
         val output = process.inputStream.bufferedReader().readText()
-        val finished = process.waitFor(60, TimeUnit.SECONDS)
+        val finished = process.waitFor(180, TimeUnit.SECONDS)
         if (!finished || process.exitValue() != 0) {
             throw IllegalStateException("Command failed (${command.joinToString(" ")}): $output")
         }
         return output
     }
 }
-
