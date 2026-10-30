@@ -12,6 +12,7 @@ window.ULAuth = (function () {
     client = window.supabase.createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         storageKey: 'ulp:auth',
+        flowType: 'pkce',
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
@@ -21,6 +22,7 @@ window.ULAuth = (function () {
 
   let currentSession = null;
   let currentMe = null;
+  let lastFetchedUid = null;
   const listeners = new Set();
 
   function isConfigured() {
@@ -29,6 +31,10 @@ window.ULAuth = (function () {
 
   function isEmbedded() {
     try { return window.self !== window.top; } catch (e) { return true; }
+  }
+
+  function stripHash(url) {
+    return String(url || location.href).split('#')[0];
   }
 
   function clearKeysCache() {
@@ -114,12 +120,16 @@ window.ULAuth = (function () {
       }
       if (!el.dataset.authBound) {
         el.dataset.authBound = '1';
-        el.addEventListener('click', (e) => {
+        el.addEventListener('click', async (e) => {
           if (currentSession && currentSession.user) return;
           if (isEmbedded()) return;
           if (!isConfigured()) return;
           e.preventDefault();
-          signIn();
+          try {
+            await signIn();
+          } catch (err) {
+            location.href = 'settings.html#account';
+          }
         });
       }
     });
@@ -177,28 +187,41 @@ window.ULAuth = (function () {
   async function fetchMe() {
     if (!currentSession || !currentSession.access_token) {
       currentMe = null;
+      lastFetchedUid = null;
+      clearKeysCache();
+      notify();
       return null;
+    }
+    const uid = currentSession.user ? currentSession.user.id : null;
+    if (currentMe && uid && currentMe.id !== uid) {
+      currentMe = null;
+      clearKeysCache();
     }
     try {
       const me = await apiFetch('/api/v1/me');
       currentMe = me;
+      lastFetchedUid = uid || (me ? me.id : null);
       saveKeysCache(me);
       notify();
       return me;
     } catch (e) {
+      currentMe = null;
+      lastFetchedUid = null;
+      clearKeysCache();
+      notify();
       return null;
     }
   }
 
   async function signIn(redirectTo) {
     if (isEmbedded()) {
-      window.open(location.href, '_blank', 'noopener');
+      window.open('settings.html#account', '_blank', 'noopener');
       return;
     }
     if (!client) {
       throw new Error('public/config.js에 Supabase URL과 Publishable 키를 먼저 설정해 주세요.');
     }
-    const target = redirectTo || location.href;
+    const target = stripHash(redirectTo || location.href);
     const { error } = await client.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: target },
@@ -210,8 +233,9 @@ window.ULAuth = (function () {
     clearKeysCache();
     currentMe = null;
     currentSession = null;
+    lastFetchedUid = null;
     if (client) {
-      try { await client.auth.signOut(); } catch (e) { /* 네트워크 오류 무시 */ }
+      try { await client.auth.signOut({ scope: 'local' }); } catch (e) { /* 네트워크 오류 무시 */ }
     }
     try { localStorage.removeItem('ulp:auth'); } catch (e) { /* 저장 불가 무시 */ }
     notify();
@@ -223,6 +247,7 @@ window.ULAuth = (function () {
       body: JSON.stringify(patch || {}),
     });
     currentMe = updated;
+    lastFetchedUid = updated ? updated.id : lastFetchedUid;
     saveKeysCache(updated);
     notify();
     return updated;
@@ -269,13 +294,32 @@ window.ULAuth = (function () {
     }
 
     client.auth.onAuthStateChange((event, session) => {
+      const prevUid = currentSession && currentSession.user ? currentSession.user.id : null;
+      const nextUid = session && session.user ? session.user.id : null;
       currentSession = session || null;
+
       if (event === 'SIGNED_OUT' || !session) {
         currentMe = null;
+        lastFetchedUid = null;
         clearKeysCache();
         notify();
-      } else {
-        notify();
+        return;
+      }
+
+      if (prevUid && nextUid && prevUid !== nextUid) {
+        currentMe = null;
+        lastFetchedUid = null;
+        clearKeysCache();
+      }
+
+      notify();
+
+      const shouldFetch = (
+        event === 'USER_UPDATED' ||
+        (event === 'SIGNED_IN' && (!currentMe || lastFetchedUid !== nextUid)) ||
+        (nextUid && lastFetchedUid !== nextUid)
+      );
+      if (shouldFetch) {
         fetchMe();
       }
     });
@@ -290,6 +334,7 @@ window.ULAuth = (function () {
   return {
     isConfigured,
     isEmbedded,
+    stripHash,
     getClient: () => client,
     getSession: () => currentSession,
     getUser: () => (currentSession ? currentSession.user : null),

@@ -19,7 +19,7 @@ const CSP = [
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob:",
-  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co http://127.0.0.1:54321 https://script.google.com https://script.googleusercontent.com https://api.github.com",
+  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://script.google.com https://script.googleusercontent.com https://api.github.com",
   'frame-src https://www.youtube.com',
   "object-src 'none'",
   "base-uri 'none'",
