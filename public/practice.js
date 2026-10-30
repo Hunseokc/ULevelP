@@ -396,6 +396,7 @@
       rec.stream.getTracks().forEach((tr) => tr.stop());
       rec.mr = rec.stream = null; rec.chunks = [];
       setTake(Object.assign({ blob, mime, seconds, done: false }, rec.meta));
+      rec.meta = null;
       uploadTake();
     };
     rec.mr = mr;
@@ -439,7 +440,13 @@
       t.done = true;
       setRec('계정에 저장됨 ' + t.time + ' · ' + fmt(t.seconds));
     } catch (e) {
-      setRec((e && e.message) || '녹음 업로드 실패', true);
+      if (e && e.status === 404) {
+        t.song = null;
+        if (st.videoId === t.videoId) st.song = null;
+        setRec('계정에서 지워진 곡이에요. 다시 올리기를 누르면 새로 만들어요', true);
+      } else {
+        setRec((e && e.message) || '녹음 업로드 실패', true);
+      }
     } finally {
       rec.uploading = false;
       renderRec();
@@ -582,6 +589,7 @@
   const q = new URLSearchParams(location.search);
   const startId = videoIdFrom(q.get('v') || '');
   let started = false, lastUid = null;
+  const migrationAttempted = {};
   render();
   (async function start() {
     // 저장된 로그인 세션을 먼저 읽는다 (ULAuth.init보다 먼저 실행되므로)
@@ -594,6 +602,11 @@
         ? { a: num(q.get('a')), b: num(q.get('b')), rate: num(q.get('r')) || 1, t: num(q.get('t')) }
         : null;
       await openSong(startId, { params });
+    }
+    const me = window.ULAuth && ULAuth.getMe();
+    if (me && !me.migratedLocalAt && lastUid && !migrationAttempted[lastUid]) {
+      migrationAttempted[lastUid] = true;
+      runMigration();
     }
   })();
 
@@ -632,8 +645,6 @@
     });
   }
 
-  const migrationAttempted = {};
-
   if (window.ULAuth) ULAuth.onChange((state) => {
     if (!started) return;
     const uid = state.user ? state.user.id : null;
@@ -641,6 +652,7 @@
       lastUid = uid;
       st.song = null; songsCache = null;
       if (rec.take && !rec.take.done) rec.take.song = null;
+      if (rec.meta) rec.meta.song = null;
       if (uid && st.videoId) refreshSong();
       render();
     }
