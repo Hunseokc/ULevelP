@@ -8,6 +8,7 @@ import ulevelp.db.DatabaseConfig
 import ulevelp.module
 import ulevelp.service.VideoMeta
 import ulevelp.service.VideoMetaClient
+import ulevelp.storage.StorageClient
 import java.math.BigInteger
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -131,7 +132,8 @@ class FakeVideoMetaClient(
 
 fun ApplicationTestBuilder.configureApiTestApp(
     dbConfig: DatabaseConfig,
-    videoMetaClient: VideoMetaClient = FakeVideoMetaClient()
+    videoMetaClient: VideoMetaClient = FakeVideoMetaClient(),
+    storageClient: StorageClient? = null
 ) {
     application {
         module(
@@ -139,7 +141,8 @@ fun ApplicationTestBuilder.configureApiTestApp(
             authConfig = TestJwt.authConfig,
             allowedOrigins = listOf("http://localhost:3000"),
             videoMetaClient = videoMetaClient,
-            publicAppUrl = "https://hunseokc.github.io/ULevelP/"
+            publicAppUrl = "https://hunseokc.github.io/ULevelP/",
+            storageClient = storageClient
         )
     }
 }
@@ -164,4 +167,3 @@ fun assertStandardError(
     assertTrue(obj["retryAfter"] is JsonNull)
     return obj
 }
-

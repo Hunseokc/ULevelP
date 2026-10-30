@@ -4,6 +4,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -19,7 +20,8 @@ import java.math.RoundingMode
 fun Route.registerSongRoutes(
     jwtVerifier: SupabaseJwtVerifier?,
     profileService: ProfileService,
-    songService: SongService
+    songService: SongService,
+    storageTrashService: StorageTrashService
 ) {
     route("/songs") {
         install(SupabaseAuthPlugin) {
@@ -143,7 +145,8 @@ fun Route.registerSongRoutes(
             val user = call.requireAuthUser()
             val songId = parsePathUuid(call.parameters["songId"])
 
-            songService.delete(user.id, songId)
+            val ids = songService.delete(user.id, songId)
+            storageTrashService.purge(ids)
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respond(
                 HttpStatusCode.OK,
@@ -152,4 +155,3 @@ fun Route.registerSongRoutes(
         }
     }
 }
-
