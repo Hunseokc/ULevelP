@@ -95,7 +95,7 @@ class ChordEngineTest {
     @Test
     fun `Ktor API 엔드포인트 및 정적 파일 서빙 검증`() = testApplication {
         application {
-            module(dbConfig = null)
+            module(dbConfig = null, authConfig = null)
         }
 
         // 1. /api/health
