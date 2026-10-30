@@ -111,5 +111,18 @@ class YoutubeOEmbedClientTest {
         val meta = client.fetch("dQw4w9WgXcQ")
         assertNull(meta)
     }
-}
 
+    @Test
+    fun `Y5 title이 JSON null인 경우 null 반환`() = runTest {
+        responseHandler.set {
+            200 to """{"title":null,"author_name":"A"}"""
+        }
+        val client = YoutubeOEmbedClient(
+            endpoint = URI("http://127.0.0.1:$port/oembed"),
+            timeout = Duration.ofSeconds(2)
+        )
+
+        val meta = client.fetch("dQw4w9WgXcQ")
+        assertNull(meta)
+    }
+}

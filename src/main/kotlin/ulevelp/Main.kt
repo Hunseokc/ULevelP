@@ -20,7 +20,12 @@ import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.db.DatabaseConfig
 import ulevelp.db.DatabaseFactory
-import ulevelp.routes.*
+import ulevelp.routes.BadRequestException
+import ulevelp.routes.ChordApi
+import ulevelp.routes.registerChordRoutes
+import ulevelp.routes.registerMeRoutes
+import ulevelp.routes.registerPracticeRoutes
+import ulevelp.routes.registerSongRoutes
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService

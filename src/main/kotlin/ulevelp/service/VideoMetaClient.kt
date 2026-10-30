@@ -4,8 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
@@ -47,13 +47,13 @@ class YoutubeOEmbedClient(
             }
 
             val json = Json.parseToJsonElement(response.body()).jsonObject
-            val titleRaw = json["title"]?.jsonPrimitive?.content?.trim() ?: ""
+            val titleRaw = (json["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim() ?: ""
             if (titleRaw.isEmpty()) {
                 logger.warn("oEmbed 조회 실패 videoId={}: title이 비어 있음", videoId)
                 return@withContext null
             }
             val title = if (titleRaw.length > 300) titleRaw.take(300) else titleRaw
-            val authorRaw = json["author_name"]?.jsonPrimitive?.content?.trim() ?: ""
+            val authorRaw = (json["author_name"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim() ?: ""
             val author = if (authorRaw.length > 200) authorRaw.take(200) else authorRaw
 
             VideoMeta(title = title, author = author)
@@ -65,4 +65,3 @@ class YoutubeOEmbedClient(
         }
     }
 }
-

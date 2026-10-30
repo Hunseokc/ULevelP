@@ -101,6 +101,27 @@ class SongService(
     private fun formatTimestamp(dt: OffsetDateTime): String =
         DateTimeFormatter.ISO_INSTANT.format(dt.toInstant())
 
+    private fun Transaction.loadSongDto(userId: UUID, songId: UUID? = null, videoId: String? = null): SongDto? {
+        val query = SongsTable.selectAll().where { SongsTable.userId eq userId }
+        if (songId != null) {
+            query.andWhere { SongsTable.id eq songId }
+        }
+        if (videoId != null) {
+            query.andWhere { SongsTable.videoId eq videoId }
+        }
+        val row = query.singleOrNull() ?: return null
+
+        val actualSongId = row[SongsTable.id]
+        val sumExpr = SessionsTable.seconds.sum()
+        val totalSec = SessionsTable
+            .select(sumExpr)
+            .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq actualSongId) }
+            .singleOrNull()
+            ?.get(sumExpr)?.toLong() ?: 0L
+
+        return rowToDto(row, totalSec)
+    }
+
     suspend fun list(userId: UUID, statusCode: String?): List<SongDto> {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
@@ -134,18 +155,7 @@ class SongService(
     suspend fun findByVideo(userId: UUID, videoId: String): SongDto? {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
-            val row = SongsTable.selectAll()
-                .where { (SongsTable.userId eq userId) and (SongsTable.videoId eq videoId) }
-                .singleOrNull() ?: return@dbQuery null
-
-            val sumExpr = SessionsTable.seconds.sum()
-            val totalSec = SessionsTable
-                .select(sumExpr)
-                .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq row[SongsTable.id]) }
-                .singleOrNull()
-                ?.get(sumExpr)?.toLong() ?: 0L
-
-            rowToDto(row, totalSec)
+            loadSongDto(userId = userId, videoId = videoId)
         }
     }
 
@@ -154,20 +164,7 @@ class SongService(
 
         // 1. 트랜잭션 A: 이미 존재하는 곡 확인 (있으면 oEmbed 호출하지 않고 바로 반환)
         val existing = DatabaseFactory.dbQuery(database) {
-            val row = SongsTable.selectAll()
-                .where { (SongsTable.userId eq userId) and (SongsTable.videoId eq input.videoId) }
-                .singleOrNull()
-            if (row != null) {
-                val sumExpr = SessionsTable.seconds.sum()
-                val totalSec = SessionsTable
-                    .select(sumExpr)
-                    .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq row[SongsTable.id]) }
-                    .singleOrNull()
-                    ?.get(sumExpr)?.toLong() ?: 0L
-                rowToDto(row, totalSec)
-            } else {
-                null
-            }
+            loadSongDto(userId = userId, videoId = input.videoId)
         }
         if (existing != null) {
             return CreateSongResult(song = existing, created = false)
@@ -202,16 +199,9 @@ class SongService(
                 val row = SongsTable.selectAll().where { SongsTable.id eq newId }.single()
                 CreateSongResult(song = rowToDto(row, 0L), created = true)
             } else {
-                val row = SongsTable.selectAll()
-                    .where { (SongsTable.userId eq userId) and (SongsTable.videoId eq input.videoId) }
-                    .single()
-                val sumExpr = SessionsTable.seconds.sum()
-                val totalSec = SessionsTable
-                    .select(sumExpr)
-                    .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq row[SongsTable.id]) }
-                    .singleOrNull()
-                    ?.get(sumExpr)?.toLong() ?: 0L
-                CreateSongResult(song = rowToDto(row, totalSec), created = false)
+                val song = loadSongDto(userId = userId, videoId = input.videoId)
+                    ?: error("Failed to load existing song after insertIgnore collision")
+                CreateSongResult(song = song, created = false)
             }
         }
     }
@@ -230,18 +220,8 @@ class SongService(
 
             OutboxRepository.enqueueIfSyncEnabled(userId, "song", songId, "upsert")
 
-            val row = SongsTable.selectAll()
-                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
-                .single()
-
-            val sumExpr = SessionsTable.seconds.sum()
-            val totalSec = SessionsTable
-                .select(sumExpr)
-                .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq songId) }
-                .singleOrNull()
-                ?.get(sumExpr)?.toLong() ?: 0L
-
-            rowToDto(row, totalSec)
+            loadSongDto(userId = userId, songId = songId)
+                ?: throw NotFoundException("곡을 찾을 수 없습니다.")
         }
     }
 
@@ -499,4 +479,3 @@ class SongService(
         }
     }
 }
-

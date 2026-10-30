@@ -146,7 +146,9 @@ curl.exe -s -o NUL -w "%{http_code}`n" http://localhost:3000/api/v1/nope
 
 ## 4. 명세와 달라진 점
 
-- **없음:** 모든 API 엔드포인트 경로, 요청/응답 필드 및 상태 코드, 오류 메시지, 트랜잭션 분리 및 정렬 규칙이 `K1-1_구현명세.md`와 100% 일치하도록 구현되었습니다.
+1. `normalizeStatus`가 `"연습중"`(띄어쓰기 없음)도 허용 (사용자 편의 입력 허용).
+2. 세션 INSERT 시 `rate`가 null일 때 컬럼 할당 생략 (DB nullable 컬럼 및 default 없음).
+3. `Main.kt` import는 와일드카드(`ulevelp.routes.*`) 대신 개별 import로 유지.
 
 ---
 
@@ -157,3 +159,4 @@ curl.exe -s -o NUL -w "%{http_code}`n" http://localhost:3000/api/v1/nope
    - `${name}은(는) ...`와 같이 중괄호(`${name}`)를 명시하여 변수명을 정확히 격리함으로써 정상 컴파일되도록 해결했습니다.
 2. **PowerShell 구문 주의:**
    - Windows PowerShell 환경에서는 `&&` 대신 세미콜론(`;`)을 사용해야 하며, curl 명령 시 기본 별칭 충돌을 피하기 위해 `curl.exe`를 사용했습니다.
+

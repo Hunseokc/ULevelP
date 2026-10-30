@@ -392,6 +392,10 @@ class PracticeSaveApiTest {
                 for ((k, v) in map) {
                     when (v) {
                         is String -> put(k, v)
+                        is Int -> put(k, v)
+                        is Long -> put(k, v)
+                        is Double -> put(k, v)
+                        is Float -> put(k, v)
                         is Number -> put(k, v.toDouble())
                         is Boolean -> put(k, v)
                     }
@@ -399,47 +403,48 @@ class PracticeSaveApiTest {
             }.toString()
         }
 
-        val badBodies = listOf(
+        val badCases = listOf(
             // songId 없음
-            buildJsonObject { put("pos", 45.0); put("date", today.toString()) }.toString(),
+            buildJsonObject { put("pos", 45.0); put("date", today.toString()) }.toString() to "songId 값이 필요합니다.",
             // songId "x"
-            copyWith { put("songId", "x") },
+            copyWith { put("songId", "x") } to "songId 형식이 올바르지 않습니다.",
             // pos 없음
-            buildJsonObject { put("songId", songX); put("date", today.toString()) }.toString(),
+            buildJsonObject { put("songId", songX); put("date", today.toString()) }.toString() to "pos 값이 필요합니다.",
             // pos -1
-            copyWith { put("pos", -1.0) },
+            copyWith { put("pos", -1.0) } to "pos은(는) 0.0~86400.0 범위여야 합니다.",
             // pos 86401
-            copyWith { put("pos", 86401.0) },
+            copyWith { put("pos", 86401.0) } to "pos은(는) 0.0~86400.0 범위여야 합니다.",
             // pos 문자열 "45"
-            """{"songId":"$songX","pos":"45","date":"$today"}""",
+            """{"songId":"$songX","pos":"45","date":"$today"}""" to "pos 형식이 올바르지 않습니다.",
             // a >= b
-            copyWith { put("a", 50.0); put("b", 40.0) },
+            copyWith { put("a", 50.0); put("b", 40.0) } to "a는 b보다 작아야 합니다.",
             // rate 0.1
-            copyWith { put("rate", 0.1) },
+            copyWith { put("rate", 0.1) } to "rate은(는) 0.25~2.0 범위여야 합니다.",
             // date "2026/10/30"
-            copyWith { put("date", "2026/10/30") },
+            copyWith { put("date", "2026/10/30") } to "date 형식이 올바르지 않습니다.",
             // date today + 2일
-            copyWith { put("date", today.plusDays(2).toString()) },
+            copyWith { put("date", today.plusDays(2).toString()) } to "date은(는) 2000-01-01부터 내일(UTC)까지만 쓸 수 있습니다.",
             // date "1999-12-31"
-            copyWith { put("date", "1999-12-31") },
+            copyWith { put("date", "1999-12-31") } to "date은(는) 2000-01-01부터 내일(UTC)까지만 쓸 수 있습니다.",
             // addSeconds -1
-            copyWith { put("addSeconds", -1) },
+            copyWith { put("addSeconds", -1) } to "addSeconds은(는) 0~21600 범위여야 합니다.",
             // addSeconds 21601
-            copyWith { put("addSeconds", 21601) },
+            copyWith { put("addSeconds", 21601) } to "addSeconds은(는) 0~21600 범위여야 합니다.",
             // addSeconds 30.5
-            """{"songId":"$songX","pos":45.0,"date":"$today","addSeconds":30.5}""",
+            """{"songId":"$songX","pos":45.0,"date":"$today","addSeconds":30.5}""" to "addSeconds 형식이 올바르지 않습니다.",
             // addLoops 100001
-            copyWith { put("addLoops", 100001) }
+            copyWith { put("addLoops", 100001) } to "addLoops은(는) 0~100000 범위여야 합니다."
         )
 
-        for (body in badBodies) {
+        for ((body, expectedMsg) in badCases) {
             val res = client.post("/api/v1/practice/save") {
                 header(HttpHeaders.Authorization, "Bearer $tokenA")
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
             assertEquals(HttpStatusCode.BadRequest, res.status, "Failed for body: $body")
-            assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+            val errObj = assertStandardError(res.bodyAsText(), 400, "INVALID_INPUT")
+            assertEquals(expectedMsg, errObj["message"]?.jsonPrimitive?.content, "Error message mismatch for body: $body")
         }
 
         transaction(db) {

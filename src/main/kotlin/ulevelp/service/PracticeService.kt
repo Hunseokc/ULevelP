@@ -46,6 +46,24 @@ class PracticeService(private val db: Database?) {
             message = "데이터베이스가 연결되어 있지 않습니다."
         )
 
+    private fun Transaction.updateSessionInTransaction(userId: UUID, input: SaveProgressInput): Int {
+        return SessionsTable.update({
+            (SessionsTable.userId eq userId) and
+            (SessionsTable.songId eq input.songId) and
+            (SessionsTable.date eq input.date)
+        }) {
+            with(SqlExpressionBuilder) {
+                it[seconds] = seconds + input.addSeconds
+                it[loops] = loops + input.addLoops
+            }
+            if (input.rate != null) {
+                it[rate] = input.rate
+            }
+            it[a] = input.a
+            it[b] = input.b
+        }
+    }
+
     suspend fun saveProgress(userId: UUID, input: SaveProgressInput): SaveProgressResponse {
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
@@ -88,21 +106,7 @@ class PracticeService(private val db: Database?) {
             }
 
             // 4. 당일 세션 합산 UPDATE 시도
-            val updatedSessionCount = SessionsTable.update({
-                (SessionsTable.userId eq userId) and
-                (SessionsTable.songId eq input.songId) and
-                (SessionsTable.date eq input.date)
-            }) {
-                with(SqlExpressionBuilder) {
-                    it[seconds] = seconds + input.addSeconds
-                    it[loops] = loops + input.addLoops
-                }
-                if (input.rate != null) {
-                    it[rate] = input.rate
-                }
-                it[a] = input.a
-                it[b] = input.b
-            }
+            val updatedSessionCount = updateSessionInTransaction(userId, input)
 
             // 5. 합산 대상 행이 없는 경우 (당일 첫 연습 기록)
             if (updatedSessionCount == 0) {
@@ -135,21 +139,7 @@ class PracticeService(private val db: Database?) {
 
                 if (insCount == 0) {
                     // 동시 요청으로 다른 트랜잭션이 이미 INSERT한 경우 다시 UPDATE
-                    SessionsTable.update({
-                        (SessionsTable.userId eq userId) and
-                        (SessionsTable.songId eq input.songId) and
-                        (SessionsTable.date eq input.date)
-                    }) {
-                        with(SqlExpressionBuilder) {
-                            it[seconds] = seconds + input.addSeconds
-                            it[loops] = loops + input.addLoops
-                        }
-                        if (input.rate != null) {
-                            it[rate] = input.rate
-                        }
-                        it[a] = input.a
-                        it[b] = input.b
-                    }
+                    updateSessionInTransaction(userId, input)
                 }
             }
 
@@ -186,4 +176,3 @@ class PracticeService(private val db: Database?) {
         const val MIN_NEW_SESSION_SECONDS = 60
     }
 }
-
