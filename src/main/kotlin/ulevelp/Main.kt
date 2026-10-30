@@ -20,21 +20,31 @@ import ulevelp.auth.SupabaseAuthConfig
 import ulevelp.auth.SupabaseJwtVerifier
 import ulevelp.db.DatabaseConfig
 import ulevelp.db.DatabaseFactory
-import ulevelp.routes.BadRequestException
-import ulevelp.routes.ChordApi
-import ulevelp.routes.registerChordRoutes
-import ulevelp.routes.registerMeRoutes
+import ulevelp.routes.*
+import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
+import ulevelp.service.SongService
+import ulevelp.service.VideoMetaClient
+import ulevelp.service.YoutubeOEmbedClient
 import java.io.File
 import java.net.URI
 
 private const val DEFAULT_ALLOWED_ORIGINS = "https://hunseokc.github.io,http://localhost:3000"
+private const val DEFAULT_PUBLIC_APP_URL = "https://hunseokc.github.io/ULevelP/"
 
 fun parseAllowedOrigins(raw: String?): List<String> {
     val source = raw?.takeIf { it.isNotBlank() } ?: DEFAULT_ALLOWED_ORIGINS
     return source.split(',')
         .map { it.trim() }
         .filter { it.isNotEmpty() }
+}
+
+fun parsePublicAppUrl(raw: String?): String {
+    val trimmed = raw?.trim()
+    if (trimmed.isNullOrEmpty()) {
+        return DEFAULT_PUBLIC_APP_URL
+    }
+    return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
 }
 
 fun main() {
@@ -48,7 +58,9 @@ fun Application.module(
     publicDir: File = File(System.getenv("PUBLIC_DIR") ?: "public"),
     dbConfig: DatabaseConfig? = DatabaseFactory.fromEnvOrNull(),
     authConfig: SupabaseAuthConfig? = SupabaseAuthConfig.fromEnvOrNull(),
-    allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS"))
+    allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS")),
+    videoMetaClient: VideoMetaClient = YoutubeOEmbedClient(),
+    publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL"))
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -69,6 +81,8 @@ fun Application.module(
     }
 
     val profileService = ProfileService(db)
+    val songService = SongService(db, videoMetaClient, publicAppUrl)
+    val practiceService = PracticeService(db)
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -151,6 +165,8 @@ fun Application.module(
 
         route("/api/v1") {
             registerMeRoutes(jwtVerifier, profileService)
+            registerSongRoutes(jwtVerifier, profileService, songService)
+            registerPracticeRoutes(jwtVerifier, profileService, practiceService)
 
             route("{...}") {
                 handle {
