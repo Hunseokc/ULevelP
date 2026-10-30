@@ -11,6 +11,7 @@ body.pp { padding: 0; min-height: 100vh; min-height: 100dvh; }
 .pp-sync { font-size: 12px; color: var(--muted); min-height: 16px; }
 .pp-sync.err { color: var(--bad); }
 .pp-lib-btn { min-height: 44px; white-space: nowrap; }
+.pp-auth-btn { min-height: 44px; white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 13px; }
 
 .pp-main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
 @media (max-width: 960px) { .pp-main { grid-template-columns: minmax(0, 1fr); } }

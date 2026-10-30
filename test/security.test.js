@@ -14,12 +14,12 @@ const ROOT = path.join(__dirname, '..');
 // 모든 public/*.html의 CSP meta 원문. step마다 docs/03 2.3 표대로 늘린다(R2 결과 7.2 = X1 시점 원문)
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/",
+  "script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/",
   "style-src 'self' https://fonts.googleapis.com",
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data: https://i.ytimg.com",
   "media-src 'self' blob:",
-  "connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.github.com",
+  "connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://script.google.com https://script.googleusercontent.com https://api.github.com",
   'frame-src https://www.youtube.com',
   "object-src 'none'",
   "base-uri 'none'",
