@@ -11,6 +11,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.json.*
+import ulevelp.db.DatabaseConfig
+import ulevelp.db.DatabaseFactory
 import ulevelp.routes.BadRequestException
 import ulevelp.routes.ChordApi
 import ulevelp.routes.registerChordRoutes
@@ -22,7 +24,17 @@ fun main() {
     embeddedServer(Netty, port = port, host = host, module = Application::module).start(wait = true)
 }
 
-fun Application.module(publicDir: File = File(System.getenv("PUBLIC_DIR") ?: "public")) {
+fun Application.module(
+    publicDir: File = File(System.getenv("PUBLIC_DIR") ?: "public"),
+    dbConfig: DatabaseConfig? = DatabaseFactory.fromEnvOrNull()
+) {
+    if (dbConfig != null) {
+        val (dataSource, _) = DatabaseFactory.init(dbConfig)
+        monitor.subscribe(ApplicationStopped) {
+            runCatching { dataSource.close() }
+        }
+    }
+
     install(ContentNegotiation) {
         json(
             Json {
@@ -129,4 +141,3 @@ fun Application.module(publicDir: File = File(System.getenv("PUBLIC_DIR") ?: "pu
         }
     }
 }
-
