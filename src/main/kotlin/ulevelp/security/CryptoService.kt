@@ -2,6 +2,7 @@ package ulevelp.security
 
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -49,6 +50,7 @@ data class EncryptedPayload(
 /**
  * KC-D4, KC-D5:
  * - 마스터 키(`APP_MASTER_KEY`, 32바이트 Base64) 기반 AES-256-GCM 암·복호화 (12바이트 고유 IV, 128-bit Auth Tag)
+ * - 행 식별자(`$userId:$appId:$provider`)를 AAD(`cipher.updateAAD`)로 바인딩하여 타 사용자/행 복사 공격 방지
  * - 노션 통합 토큰, 노션 DB ID, Gemini API 키 형식 정규식 검증
  */
 class CryptoService(
@@ -66,15 +68,18 @@ class CryptoService(
     }
 
     /**
-     * 평문 문자열을 AES-256-GCM으로 암호화하고 끝 4자리 [EncryptedPayload.hint]와 함께 반환합니다.
+     * 평문 문자열을 AES-256-GCM(선택적 [aad] 포함)으로 암호화하고 끝 4자리 [EncryptedPayload.hint]와 함께 반환합니다.
      */
-    fun encrypt(plaintext: String): EncryptedPayload {
+    fun encrypt(plaintext: String, aad: String? = null): EncryptedPayload {
         val trimmed = plaintext.trim()
         require(trimmed.isNotEmpty()) { "암호화할 시크릿이 비어 있습니다." }
 
         val iv = ByteArray(IV_BYTES).also { secureRandom.nextBytes(it) }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, GCMParameterSpec(GCM_TAG_BITS, iv))
+        if (!aad.isNullOrEmpty()) {
+            cipher.updateAAD(aad.toByteArray(Charsets.UTF_8))
+        }
         val encryptedSecret = cipher.doFinal(trimmed.toByteArray(Charsets.UTF_8))
 
         return EncryptedPayload(
@@ -86,18 +91,24 @@ class CryptoService(
     }
 
     /**
-     * 공급자(`notion` | `gemini`) 키 형식을 정규식으로 먼저 검증한 뒤 AES-256-GCM으로 암호화합니다.
+     * 공급자(`notion` | `gemini`) 키 형식을 정규식으로 먼저 검증한 뒤,
+     * `$userId:$appId:$provider` AAD를 바인딩해 AES-256-GCM으로 암호화합니다.
      */
-    fun encryptProviderKey(provider: String, rawKey: String): EncryptedPayload {
+    fun encryptProviderKey(
+        userId: UUID,
+        provider: String,
+        rawKey: String,
+        appId: String = DEFAULT_APP_ID
+    ): EncryptedPayload {
         val validated = validateProviderKey(provider, rawKey)
-        return encrypt(validated)
+        return encrypt(validated, aad = integrationAad(userId, appId, provider))
     }
 
     /**
      * AES-256-GCM 암호문(`encrypted_secret`)과 12바이트 `iv`를 복호화하여 원문을 반환합니다.
-     * 암호문·태그·IV가 1비트라도 변조되었거나 마스터 키가 다르면 `AEADBadTagException`이 발생합니다.
+     * 암호문·태그·IV·AAD가 1비트라도 변조되었거나 마스터 키가 다르면 `AEADBadTagException`이 발생합니다.
      */
-    fun decrypt(encryptedSecret: ByteArray, iv: ByteArray): String {
+    fun decrypt(encryptedSecret: ByteArray, iv: ByteArray, aad: String? = null): String {
         require(iv.size == IV_BYTES) {
             "IV 길이는 정확히 ${IV_BYTES}바이트여야 합니다 (현재: ${iv.size}바이트)."
         }
@@ -107,12 +118,33 @@ class CryptoService(
 
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, GCMParameterSpec(GCM_TAG_BITS, iv))
+        if (!aad.isNullOrEmpty()) {
+            cipher.updateAAD(aad.toByteArray(Charsets.UTF_8))
+        }
         val plainBytes = cipher.doFinal(encryptedSecret)
         return String(plainBytes, Charsets.UTF_8)
     }
 
-    fun decrypt(payload: EncryptedPayload): String =
-        decrypt(payload.encryptedSecret, payload.iv)
+    fun decrypt(payload: EncryptedPayload, aad: String? = null): String =
+        decrypt(payload.encryptedSecret, payload.iv, aad)
+
+    /**
+     * `$userId:$appId:$provider` AAD를 검증하며 `integrations` 행의 암호문을 복호화합니다.
+     */
+    fun decryptProviderKey(
+        userId: UUID,
+        provider: String,
+        encryptedSecret: ByteArray,
+        iv: ByteArray,
+        appId: String = DEFAULT_APP_ID
+    ): String = decrypt(encryptedSecret, iv, aad = integrationAad(userId, appId, provider))
+
+    fun decryptProviderKey(
+        userId: UUID,
+        provider: String,
+        payload: EncryptedPayload,
+        appId: String = DEFAULT_APP_ID
+    ): String = decrypt(payload.encryptedSecret, payload.iv, aad = integrationAad(userId, appId, provider))
 
     override fun toString(): String = "CryptoService(keyVersion=$keyVersion, algorithm=$TRANSFORMATION)"
 
@@ -121,7 +153,14 @@ class CryptoService(
         const val IV_BYTES = 12
         const val GCM_TAG_BITS = 128
         const val GCM_TAG_BYTES = 16
+        const val DEFAULT_APP_ID = "ulevelp"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
+        /**
+         * `integrations` 테이블 복합 PK `(user_id, app_id, provider)`를 AAD 문자열로 직렬화합니다.
+         */
+        fun integrationAad(userId: UUID, appId: String, provider: String): String =
+            "$userId:$appId:$provider"
 
         /**
          * 노션 내부 통합 토큰 형식:
@@ -215,4 +254,3 @@ class CryptoService(
         }
     }
 }
-

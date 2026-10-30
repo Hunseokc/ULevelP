@@ -1,7 +1,9 @@
 node_modules/
 .gradle/
+.kotlin/
 build/
 bin/
+.vscode/
 .env
 .env.*
 *.log

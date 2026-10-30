@@ -21,6 +21,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.Base64
 import java.util.UUID
+import javax.crypto.AEADBadTagException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -237,8 +238,9 @@ class DatabaseMigrationAndIntegrityTest {
         val masterKey = Base64.getEncoder().encodeToString(ByteArray(32) { (it + 7).toByte() })
         val crypto = CryptoService.fromBase64Key(masterKey)
         val userId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
         val rawNotionToken = "ntn_9876543210abcdefghijABCDEFGHIJ1234"
-        val payload = crypto.encryptProviderKey("notion", rawNotionToken)
+        val payload = crypto.encryptProviderKey(userId, "notion", rawNotionToken, appId = "ulevelp")
 
         transaction(db) {
             UsersTable.insert {
@@ -263,12 +265,26 @@ class DatabaseMigrationAndIntegrityTest {
                 .where { IntegrationsTable.userId eq userId }
                 .single()
 
-            val decrypted = crypto.decrypt(
+            val decrypted = crypto.decryptProviderKey(
+                userId = row[IntegrationsTable.userId],
+                provider = row[IntegrationsTable.provider],
                 encryptedSecret = row[IntegrationsTable.encryptedSecret],
-                iv = row[IntegrationsTable.iv]
+                iv = row[IntegrationsTable.iv],
+                appId = row[IntegrationsTable.appId]
             )
             assertEquals(rawNotionToken, decrypted)
             assertEquals("1234", row[IntegrationsTable.hint])
+
+            // 다른 사용자의 userId로 복호화 시도 시 AAD 불일치로 거부됨
+            assertFailsWith<AEADBadTagException> {
+                crypto.decryptProviderKey(
+                    userId = otherUserId,
+                    provider = row[IntegrationsTable.provider],
+                    encryptedSecret = row[IntegrationsTable.encryptedSecret],
+                    iv = row[IntegrationsTable.iv],
+                    appId = row[IntegrationsTable.appId]
+                )
+            }
         }
 
         // 12바이트가 아닌 IV 저장 시 DB CHECK (octet_length(iv) = 12) 제약조건에 의해 거부됨 (23514)

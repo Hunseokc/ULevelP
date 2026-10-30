@@ -11,10 +11,10 @@
 | --- | --- |
 | **Flyway** | `org.flywaydb:flyway-core:10.20.1`, `org.flywaydb:flyway-database-postgresql:10.20.1` |
 | **JetBrains Exposed** | `org.jetbrains.exposed:exposed-core:0.56.0`, `exposed-jdbc:0.56.0`, `exposed-java-time:0.56.0`, `exposed-json:0.56.0` |
-| **커넥션 풀 / 드라이버** | `com.zaxxer:HikariCP:6.2.1`, `org.postgresql:postgresql:42.7.4` |
+| **커넥션 풀 / 드라이버** | `com.zaxxer:HikariCP:6.2.1`, `org.postgresql:postgresql:42.7.7` |
 | **마이그레이션 DDL** | `src/main/resources/db/migration/V1__init.sql` (`docs/04-db-design.md` 2절 표준 DDL 1:1 반영) |
-| **Exposed 테이블·연결** | `src/main/kotlin/ulevelp/db/Tables.kt` (12개 테이블 객체 + `ALL_TABLES`), `src/main/kotlin/ulevelp/db/DatabaseFactory.kt` (`fromEnvOrNull`, HikariCP, Flyway `migrate`, Exposed `connect`, `dbQuery`) |
-| **AES-256-GCM 및 키 검증** | `src/main/kotlin/ulevelp/security/CryptoService.kt` (32바이트 Base64 `APP_MASTER_KEY`, 12바이트 난수 IV, 128-bit GCM 태그, 끝 4자리 `hint`, 노션 토큰·DB ID·Gemini 키 정규식 검증) |
+| **Exposed 테이블·연결** | `src/main/kotlin/ulevelp/db/Tables.kt` (12개 테이블 객체 + `ALL_TABLES`, `diagramsSvg`·`config` JSONB 기본값 반영), `src/main/kotlin/ulevelp/db/DatabaseFactory.kt` (`fromEnvOrNull`, HikariCP, Flyway `migrate`, Exposed `connect`, `dbQuery`) |
+| **AES-256-GCM 및 키 검증** | `src/main/kotlin/ulevelp/security/CryptoService.kt` (32바이트 Base64 `APP_MASTER_KEY`, 12바이트 난수 IV, 128-bit GCM 태그, `$userId:$appId:$provider` AAD 바인딩, 끝 4자리 `hint`, 노션 토큰·DB ID·Gemini 키 정규식 검증) |
 | **단위·통합 테스트** | `src/test/kotlin/ulevelp/db/PostgresTestContainer.kt`, `src/test/kotlin/ulevelp/db/DatabaseMigrationAndIntegrityTest.kt`, `src/test/kotlin/ulevelp/security/CryptoServiceTest.kt` |
 
 ---
@@ -95,3 +95,4 @@ BUILD SUCCESSFUL in 17s
   - 인증된 첫 요청 시 `users`·`profiles` 자동 생성(Upsert)
   - 표준 에러 응답(`{ ok: false, source, status, code, message }`) 및 `ALLOWED_ORIGINS` CORS 플러그인
   - `GET /api/v1/me`, `PATCH /api/v1/me`(`role`·`takeQuotaBytes` 변조 무시), `DELETE /api/v1/me`(`storage_trash` 기록 + DB Cascade 삭제) 및 사용자 A·B 교차 접근 차단 통합 테스트
+

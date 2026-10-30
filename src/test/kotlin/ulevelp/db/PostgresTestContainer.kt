@@ -6,9 +6,9 @@ import java.util.concurrent.TimeUnit
 /**
  * 테스트용 PostgreSQL 16 인스턴스 공급자.
  *
- * 1. `TEST_DATABASE_URL` 환경 변수가 있으면 해당 DB를 사용한다.
- * 2. 없으면 로컬 Docker 데몬으로 `postgres:16-alpine` 컨테이너를 임시 기동하고,
- *    JVM 종료 시(`Runtime.addShutdownHook`) 자동으로 제거한다.
+ * 로컬 Docker 데몬으로 `postgres:16-alpine` 컨테이너를 임시 기동하고,
+ * JVM 종료 시(`Runtime.addShutdownHook`) 자동으로 제거한다.
+ * 테스트가 `users`를 통째로 지우므로 외부 DB 주소는 받지 않는다.
  */
 object PostgresTestContainer {
     private const val IMAGE = "postgres:16-alpine"
@@ -23,19 +23,6 @@ object PostgresTestContainer {
     @Synchronized
     fun getConfig(): DatabaseConfig {
         cachedConfig?.let { return it }
-
-        val envUrl = System.getenv("TEST_DATABASE_URL")?.takeIf { it.isNotBlank() }
-        if (envUrl != null) {
-            val cfg = DatabaseFactory.fromEnvOrNull(
-                mapOf(
-                    "DATABASE_URL" to envUrl,
-                    "DB_USER" to (System.getenv("TEST_DB_USER") ?: DB_USER),
-                    "DB_PASSWORD" to (System.getenv("TEST_DB_PASSWORD") ?: DB_PASS)
-                )
-            ) ?: error("Invalid TEST_DATABASE_URL")
-            cachedConfig = cfg
-            return cfg
-        }
 
         val runOutput = runCommand(
             "docker", "run", "-d", "--rm",

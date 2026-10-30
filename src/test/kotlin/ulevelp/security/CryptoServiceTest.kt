@@ -1,24 +1,25 @@
 package ulevelp.security
 
 import java.util.Base64
+import java.util.UUID
 import javax.crypto.AEADBadTagException
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class CryptoServiceTest {
     private val masterKeyBytes = ByteArray(32) { idx -> (idx + 1).toByte() }
     private val masterKeyBase64 = Base64.getEncoder().encodeToString(masterKeyBytes)
     private val crypto = CryptoService.fromBase64Key(masterKeyBase64, keyVersion = 1)
+    private val userA = UUID.fromString("10000000-0000-4000-8000-000000000001")
+    private val userB = UUID.fromString("20000000-0000-4000-8000-000000000002")
 
     @Test
     fun `AES-256-GCM encrypt and decrypt round-trip preserves plaintext and extracts 4-char hint`() {
         val notionToken = "ntn_1234567890abcdefghijABCDEFGHIJ9876"
-        val payload = crypto.encryptProviderKey("notion", notionToken)
+        val payload = crypto.encryptProviderKey(userA, "notion", notionToken)
 
         assertEquals(12, payload.iv.size, "IV must be 12 bytes (96-bit)")
         assertEquals(notionToken.toByteArray().size + 16, payload.encryptedSecret.size, "Ciphertext must include 16-byte GCM auth tag")
@@ -26,32 +27,55 @@ class CryptoServiceTest {
         assertEquals("9876", payload.hint)
         assertFalse(payload.toString().contains(notionToken), "toString() must never expose full secret")
 
-        val decrypted = crypto.decrypt(payload)
+        val decrypted = crypto.decryptProviderKey(userA, "notion", payload)
         assertEquals(notionToken, decrypted)
     }
 
     @Test
     fun `encrypting identical plaintext twice generates distinct random 12-byte IVs and ciphertexts`() {
         val geminiKey = "AIzaSyA1234567890abcdefghijklmnopqrstuv"
-        val first = crypto.encryptProviderKey("gemini", geminiKey)
-        val second = crypto.encryptProviderKey("gemini", geminiKey)
+        val first = crypto.encryptProviderKey(userA, "gemini", geminiKey)
+        val second = crypto.encryptProviderKey(userA, "gemini", geminiKey)
 
         assertFalse(first.iv.contentEquals(second.iv), "Each encryption must use a fresh random 12-byte IV")
         assertFalse(first.encryptedSecret.contentEquals(second.encryptedSecret), "Ciphertexts must differ when IVs differ")
-        assertEquals(geminiKey, crypto.decrypt(first))
-        assertEquals(geminiKey, crypto.decrypt(second))
+        assertEquals(geminiKey, crypto.decryptProviderKey(userA, "gemini", first))
+        assertEquals(geminiKey, crypto.decryptProviderKey(userA, "gemini", second))
         assertEquals("stuv", first.hint)
+    }
+
+    @Test
+    fun `AAD binds ciphertext to userId, appId, and provider preventing row transplant`() {
+        val notionToken = "ntn_1234567890abcdefghijABCDEFGHIJ9876"
+        val payload = crypto.encryptProviderKey(userA, "notion", notionToken, appId = "ulevelp")
+
+        // 다른 사용자(userB) 행으로 복사 시 복호화 거부
+        assertFailsWith<AEADBadTagException> {
+            crypto.decryptProviderKey(userB, "notion", payload, appId = "ulevelp")
+        }
+        // 다른 공급자(gemini)로 복호화 시도 시 거부
+        assertFailsWith<AEADBadTagException> {
+            crypto.decryptProviderKey(userA, "gemini", payload, appId = "ulevelp")
+        }
+        // 다른 appId(guitar-practice)로 복호화 시도 시 거부
+        assertFailsWith<AEADBadTagException> {
+            crypto.decryptProviderKey(userA, "notion", payload, appId = "guitar-practice")
+        }
+        // AAD 없이 복호화 시도 시 거부
+        assertFailsWith<AEADBadTagException> {
+            crypto.decrypt(payload)
+        }
     }
 
     @Test
     fun `tampered ciphertext or auth tag is rejected with AEADBadTagException`() {
         val secret = "secret_abcdefghijklmnopqrstuvwxyz123456"
-        val payload = crypto.encryptProviderKey("notion", secret)
+        val payload = crypto.encryptProviderKey(userA, "notion", secret)
 
         // 1. 암호문 첫 바이트 변조
         val tamperedCipher = payload.encryptedSecret.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }
         assertFailsWith<AEADBadTagException> {
-            crypto.decrypt(tamperedCipher, payload.iv)
+            crypto.decryptProviderKey(userA, "notion", tamperedCipher, payload.iv)
         }
 
         // 2. 끝 16바이트 GCM Auth Tag 마지막 바이트 변조
@@ -60,13 +84,13 @@ class CryptoServiceTest {
             it[lastIdx] = (it[lastIdx].toInt() xor 0x01).toByte()
         }
         assertFailsWith<AEADBadTagException> {
-            crypto.decrypt(tamperedTag, payload.iv)
+            crypto.decryptProviderKey(userA, "notion", tamperedTag, payload.iv)
         }
 
         // 3. IV 1비트 변조
         val tamperedIv = payload.iv.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }
         assertFailsWith<AEADBadTagException> {
-            crypto.decrypt(payload.encryptedSecret, tamperedIv)
+            crypto.decryptProviderKey(userA, "notion", payload.encryptedSecret, tamperedIv)
         }
     }
 
@@ -75,9 +99,9 @@ class CryptoServiceTest {
         val otherKeyBytes = ByteArray(32) { idx -> (255 - idx).toByte() }
         val otherCrypto = CryptoService(otherKeyBytes)
 
-        val payload = crypto.encrypt("ntn_abcdefghijklmnopqrstuvwxyz012345")
+        val payload = crypto.encryptProviderKey(userA, "notion", "ntn_abcdefghijklmnopqrstuvwxyz012345")
         assertFailsWith<AEADBadTagException> {
-            otherCrypto.decrypt(payload)
+            otherCrypto.decryptProviderKey(userA, "notion", payload)
         }
     }
 
@@ -118,7 +142,7 @@ class CryptoServiceTest {
         for (badToken in invalidNotionTokens) {
             assertFalse(CryptoService.isValidNotionToken(badToken), "Should reject Notion token: $badToken")
             val ex = assertFailsWith<InvalidIntegrationKeyException> {
-                 crypto.encryptProviderKey("notion", badToken)
+                crypto.encryptProviderKey(userA, "notion", badToken)
             }
             assertEquals("notion", ex.provider)
         }
@@ -138,7 +162,7 @@ class CryptoServiceTest {
         for (badKey in invalidGeminiKeys) {
             assertFalse(CryptoService.isValidGeminiKey(badKey), "Should reject Gemini key: $badKey")
             val ex = assertFailsWith<InvalidIntegrationKeyException> {
-                crypto.encryptProviderKey("gemini", badKey)
+                crypto.encryptProviderKey(userA, "gemini", badKey)
             }
             assertEquals("gemini", ex.provider)
         }
@@ -154,8 +178,7 @@ class CryptoServiceTest {
 
         // Unsupported provider
         assertFailsWith<InvalidIntegrationKeyException> {
-            crypto.encryptProviderKey("openai", "sk-1234567890")
+            crypto.encryptProviderKey(userA, "openai", "sk-1234567890")
         }
     }
 }
-
