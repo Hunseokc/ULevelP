@@ -59,7 +59,7 @@
 R2 결과 7.2 그대로. 테스트의 `CSP` 상수가 원본이고 HTML과 글자까지 같아야 한다.
 
 ```
-default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'
+default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co http://127.0.0.1:54321 https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'
 ```
 
 **다음 step에서 CSP를 늘리는 법:** `test/security.test.js`의 `CSP` 배열과 HTML 5개의 meta를 같이 고친다(테스트가 둘이 다르면 실패). 외부 스크립트(supabase-js, JSZip)는 `<script src="…@x.y.z/…" integrity="sha384-…" crossorigin="anonymous" defer>`로 넣으면 (b)를 통과한다. 늘리는 순서는 docs/03 2.3 표.

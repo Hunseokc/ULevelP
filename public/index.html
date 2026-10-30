@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob:; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co http://127.0.0.1:54321 https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ULeveLP</title>
 <meta name="description" content="코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에서">
@@ -19,7 +19,7 @@
 <div class="home-wrap">
   <nav class="site-nav" aria-label="사이트">
     <a href="./" aria-current="page">⌂ HOME</a>
-    <span class="links"><a href="notes.html">NOTES</a><a href="settings.html">SETTING</a></span>
+    <span class="links"><a href="notes.html">NOTES</a><a href="settings.html">SETTING</a><a href="settings.html#account" id="navAuth">LOGIN</a></span>
   </nav>
 
   <h1 class="wordmark">ULeveLP</h1>
@@ -61,7 +61,10 @@
   <footer class="home-foot"><span>DAILY DIARY</span><span id="copy">©2026</span></footer>
 </div>
 
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
 <script src="site.js"></script>
+<script src="auth.js"></script>
 <script src="home.js"></script>
 </body>
 </html>
