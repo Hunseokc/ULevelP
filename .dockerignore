@@ -1,6 +1,13 @@
+.git
+.github
+.gradle
+build
 node_modules
 test
-.git
+docs
+개발산출물
+apps-script
+scripts
 *.md
-Dockerfile
-docker-compose.yml
+.env
+.env.*
