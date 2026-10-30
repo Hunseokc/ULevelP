@@ -32,6 +32,10 @@
 - 주요 에러 코드(`code`):
   - `UNAUTHORIZED` (`401`): 토큰 누락·만료
   - `INVALID_INPUT` (`400`): 파라미터 형식 오류 (예: `invalid_notion_token`, `invalid_notion_db_id`, `invalid_gemini_key`)
+  - `NOT_FOUND` (`404`): 없는 리소스, **다른 사용자의 리소스**(곡·세션·녹음 공통, 403을 쓰지 않음), 경로 id가 UUID 형식이 아님
+  - `TAKE_TOO_LARGE` (`413`): 녹음 파일 1개가 50MB 초과
+  - `STORAGE_UNAVAILABLE` (`503`): 서버에 녹음 저장소(`SUPABASE_SECRET_KEY`)가 설정되지 않음
+  - `STORAGE_ERROR` (`502`): Supabase Storage 업로드·서명 URL 발급 실패
   - `NO_KEY` (`412`): 해당 기능에 필요한 노션/Gemini 키 미등록 (`FR-KEY-GATE`)
   - `PROVIDER_KEY_INVALID` (`400` / `401` / `403`): 등록된 노션 토큰 또는 Gemini 키가 외부 API에서 거부됨 → 클라이언트는 `ulp:keys` 캐시 초기화
   - `NOTION_OBJECT_NOT_FOUND` (`404`): 노션 DB를 찾을 수 없거나 페이지에 통합이 연결되지 않음
@@ -93,6 +97,7 @@
 ## 3. 연습 곡 API (`Songs`)
 
 > 프런트엔드 `public/data.js`의 `ULData.songs.*` 메서드와 1:1 대응하며, 반환되는 곡 객체 구조는 기존 `Code.gs`의 `readSong` 형식과 완벽히 호환됩니다.
+> **곡 객체(`SongDto`)는 모든 곡 응답에서 3.1의 14개 필드 그대로입니다**(`{ "song": { ... } }`의 `...`도 같음). `totalSeconds`는 그 곡 세션 `seconds` 합(초). `resumeUrl`은 `PUBLIC_APP_URL`(기본 `https://hunseokc.github.io/ULevelP/`) + `practice.html?v=&t=&a=&b=&r=`로, `public/practice.js`의 `resumeUrl()`과 같은 규칙(`t`는 `pos ?? a`의 정수 내림, 0이면 생략 / `a`·`b`는 있을 때만 / `r`은 1이 아닐 때만)으로 계산합니다(FR-SONG-6). 구현 상세는 `개발산출물/명세/K1-1_구현명세.md`.
 
 ### 3.1 내 연습 곡 목록 조회
 - **`GET /api/v1/songs`**
@@ -116,7 +121,7 @@
       "lastDate": "2026-10-30",
       "memo": "39초 구간 보이싱 손가락 번호 주의",
       "totalSeconds": 3420,
-      "resumeUrl": "https://hunseokc.github.io/ULevelP/practice.html?v=dQw4w9WgXcQ&t=42.5&a=38&b=55.2&r=0.75"
+      "resumeUrl": "https://hunseokc.github.io/ULevelP/practice.html?v=dQw4w9WgXcQ&t=42&a=38&b=55.2&r=0.75"
     }
   ]
 }
@@ -124,12 +129,12 @@
 
 ### 3.2 유튜브 영상 ID로 단일 곡 조회
 - **`GET /api/v1/songs/by-video/{videoId}`**
-- **설명:** 플레이어(`practice.html?v=...`) 진입 시 호출합니다(`FR-SONG-1`). 등록된 곡이 없으면 `song: null`을 반환합니다.
+- **설명:** 플레이어(`practice.html?v=...`) 진입 시 호출합니다(`FR-SONG-1`). 등록된 곡이 없으면 `song: null`을 반환합니다. `videoId`가 `^[A-Za-z0-9_-]{11}$`가 아니면 `400 INVALID_INPUT`. 이 API는 oEmbed를 부르지 않습니다.
 - **Response (`200 OK`):** `{ "song": { ... } }` 또는 `{ "song": null }`
 
 ### 3.3 연습 곡 추가 (멱등 생성)
 - **`POST /api/v1/songs`**
-- **설명:** 새 연습 곡을 등록합니다(`FR-SONG-2`). 이미 동일 `videoId`로 등록된 곡이 있으면 기존 곡을 그대로 반환합니다. `title`이 비어 있으면 서버가 YouTube oEmbed API를 호출하여 제목과 채널명을 채웁니다.
+- **설명:** 새 연습 곡을 등록합니다(`FR-SONG-2`). 이미 동일 `videoId`로 등록된 곡이 있으면 기존 곡을 그대로 반환합니다(본문 값으로 바꾸지 않음). `title`이 비어 있으면 서버가 YouTube oEmbed API를 호출하여 제목과 채널명을 채우고, oEmbed가 실패하면 제목 `"(제목 없음)"`으로 만듭니다. `rate`는 0.25~2.0(생략 시 1.0), `title` 300자·`artist` 200자 이하.
 - **Request Body:**
 ```json
 {
@@ -139,10 +144,10 @@
   "rate": 1.0
 }
 ```
-- **Response (`200 OK` / `201 Created`):** `{ "song": { ... } }`
+- **Response:** 새로 만들면 `201 Created`, 같은 `videoId` 곡이 이미 있으면 `200 OK`. 본문은 둘 다 `{ "song": { ... } }`.
 
 ### 3.4 곡 상세 조회 (타임라인 및 녹음 목록 포함)
-- **`GET /api/v1/songs/{songId}`**
+- **`GET /api/v1/songs/{songId}`** — K2-2에서 구현(A0 결정). `takes[]` 항목은 5.1의 녹음 객체(`TakeDto`, 12개 필드)와 같습니다.
 - **설명:** 곡 상세 화면(`log.html?song={songId}`)을 위한 API로, 곡 정보와 날짜별 연습 세션 타임라인, 녹음 테이크 목록을 함께 반환합니다(`FR-LIB-2`).
 - **Response (`200 OK`):**
 ```json
@@ -183,7 +188,7 @@
 
 ### 3.5 곡 상태·메모 수정 및 곡 삭제
 - **`PATCH /api/v1/songs/{songId}`**
-  - **Request Body:** `{ "status": "보류", "memo": "다음 달 재도전", "title": "수정할 제목(선택)" }`
+  - **Request Body:** `{ "status": "보류", "memo": "다음 달 재도전", "title": "수정할 제목(선택)" }` — 셋 중 하나 이상 필요. `status`는 코드·한글 모두 허용, `memo` 2000자 이하, `title`은 빈 문자열 불가.
   - **Response (`200 OK`):** `{ "song": { ... } }`
 - **`DELETE /api/v1/songs/{songId}`**
   - **설명:** 곡과 하위 `sessions`, `takes`를 삭제하고 녹음 파일은 `storage_trash`로 지웁니다. 노션 연동 활성화 시 곡과 각 세션의 `delete` 이벤트를 `sync_outbox`에 적재합니다(`FR-SONG-5`, 절차는 [04 3.2.1절](04-db-design.md)).
@@ -201,6 +206,7 @@
   "markMigrated": true
 }
 ```
+- **규칙:** `items`는 최대 100개(넘으면 `400`). 기기 기록은 믿을 수 없으므로 항목 하나가 틀려도 요청 전체를 거부하지 않습니다 — `videoId` 형식이 틀린 항목·같은 `videoId` 중복·이미 있는 곡은 `skipped`로 셉니다. 범위를 벗어난 `pos`·`a`·`b`·`date`는 `null`, `rate`는 `1.0`으로 바꿔 저장합니다. 새 곡 제목은 oEmbed로 채웁니다(트랜잭션 밖, 동시 8건). `migratedLocalAt`은 처리 뒤 프로필 값이며 `markMigrated: false`이고 원래 없으면 `null`.
 - **Response (`200 OK`):** `{ "created": 1, "skipped": 0, "migratedLocalAt": "2026-10-30T09:30:00Z" }`
 
 ---
@@ -240,7 +246,10 @@
   "minutes": 16.5
 }
 ```
-*(1분 미만 보류 시: `{ "ok": true, "keep": true, "sessionId": null, "pendingSeconds": 30 }`)*
+- 응답은 항상 위 6개 키(`ok`, `keep`, `sessionId`, `totalSeconds`, `minutes`, `pendingSeconds`)이고 해당 없는 칸은 `null`입니다. `totalSeconds`는 그 세션의 합산 후 `seconds`, `minutes`는 소수 1자리.
+  - 1분 미만 보류: `{ "ok": true, "keep": true, "sessionId": null, "totalSeconds": null, "minutes": null, "pendingSeconds": 30 }`
+  - `addSeconds`·`addLoops`가 모두 0(곡 위치만 저장): `{ "ok": true, "keep": false, "sessionId": null, "totalSeconds": null, "minutes": null, "pendingSeconds": null }`
+- **검증:** `songId`(UUID)·`pos`(0~86400초)·`date`(`YYYY-MM-DD`, 2000-01-01~내일 UTC) 필수. `a`·`b`는 0~86400초이고 `a < b`(생략·`null`이면 구간을 지움). `rate` 0.25~2.0(생략 시 기존 값 유지). `addSeconds` 0~21600 정수, `addLoops` 0~100000 정수. 남의 곡·없는 곡은 `404 NOT_FOUND`.
 
 ### 4.2 기간별 연습 기록 및 12주 달력 조회
 - **`GET /api/v1/sessions`**
@@ -291,8 +300,10 @@
 - **`POST /api/v1/takes`**
 - **설명:**
   - **방식 1 (`multipart/form-data`, 기본 Supabase Storage):** `metadata`(JSON 파트)와 `file`(오디오 바이너리 파트)을 전송합니다. 서버가 200MB 쿼터를 검사(`FR-TAKE-4`)하고, 당일 세션이 없으면 0분 세션을 생성(`FR-TAKE-2`)한 뒤 스토리지(`{userId}/{takeId}.{ext}`)에 저장합니다. 업로드·DB 기록 순서는 [04 3.2절](04-db-design.md) 참고.
-  - **방식 2 (`application/json`, Google Drive 모드 `P6`):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`).
-- **Response (`201 Created`):**
+    - `metadata`: `{ songId, date, recordedAt, a, b, rate, durationSec, mime }` — `durationSec` 0~3600초, `mime`은 `;codecs=…`를 떼고 6종(`FR-TAKE-5`) 중 하나. `sizeBytes`·`storageKey`는 서버가 정합니다(보내도 무시).
+    - 파일 50MB 초과 `413 TAKE_TOO_LARGE`, 쿼터 초과 `413 TAKE_QUOTA_EXCEEDED`, 저장소 실패 `502 STORAGE_ERROR`, 저장소 미설정 `503 STORAGE_UNAVAILABLE`.
+  - **방식 2 (`application/json`, Google Drive 모드 `P6`, K6-1에서 구현):** 브라우저가 Google Drive에 먼저 업로드한 뒤 `{ songId, date, recordedAt, a, b, rate, durationSec, mime, sizeBytes, storage: "drive", storageKey: "<driveFileId>" }`를 전송해 DB 행만 등록합니다(`FR-DRIVE-2`). K1-2~K6-1 사이에는 multipart가 아니면 `400 INVALID_INPUT`.
+- **Response (`201 Created`):** `take`는 녹음 객체(`TakeDto`) 12개 필드이며 3.4·4.2의 녹음 항목과 같습니다.
 ```json
 {
   "ok": true,
@@ -300,10 +311,15 @@
     "id": "t1000000-0000-4000-8000-000000000001",
     "sessionId": "s1000000-0000-4000-8000-000000000001",
     "recordedAt": "2026-10-30T14:22:10Z",
+    "a": 38.0,
+    "b": 55.2,
+    "rate": 0.75,
     "durationSec": 18,
     "mime": "audio/mp4",
     "sizeBytes": 284120,
-    "storage": "supabase"
+    "storage": "supabase",
+    "storageKey": "550e8400-e29b-41d4-a716-446655440000/t1000000-0000-4000-8000-000000000001.m4a",
+    "memo": ""
   }
 }
 ```
@@ -311,11 +327,12 @@
 ### 5.2 녹음 재생용 서명 URL 발급
 - **`GET /api/v1/takes/{takeId}/url`**
 - **설명:** Supabase Storage에 저장된 녹음에 대해 60분간 유효한 서명 URL(`createSignedUrl`)을 반환합니다(`FR-TAKE-6`).
-- **Response (`200 OK`):** `{ "url": "https://storage.googleapis.com/...", "expiresIn": 3600 }`
+- **Response (`200 OK`):** `{ "url": "https://<project-ref>.supabase.co/storage/v1/object/sign/takes/...?token=...", "expiresIn": 3600 }`
+- `storage = 'drive'`인 녹음은 `400 INVALID_INPUT`(브라우저가 Drive에서 직접 재생), 서명 실패 `502 STORAGE_ERROR`.
 
 ### 5.3 녹음 삭제 및 드라이브 이전 갱신
-- **`DELETE /api/v1/takes/{takeId}`**: 스토리지 파일 및 `takes` 행 삭제, 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`).
-- **`POST /api/v1/takes/{takeId}/migrate-drive`**: 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
+- **`DELETE /api/v1/takes/{takeId}`**: 스토리지 파일 및 `takes` 행 삭제(파일은 `storage_trash`를 거쳐 커밋 직후 삭제), 노션 연동 시 노션 오디오 블록 아카이브(`sync_outbox` `delete`). 세션 행은 남깁니다. **Response (`200 OK`):** `{ "ok": true }`
+- **`POST /api/v1/takes/{takeId}/migrate-drive`** (K6-1): 기존 스토리지 녹음을 사용자 Google Drive로 옮긴 뒤 `{ "driveFileId": "..." }`를 전달하면 서버가 `storage = 'drive'`, `storage_key = driveFileId`로 변경하고 기존 Supabase Storage 파일을 삭제해 쿼터를 반환합니다(`FR-DRIVE-4`).
 
 ---
 
