@@ -13,6 +13,7 @@ class FakeStorageClient : StorageClient {
     @Volatile var failSign = false
     @Volatile var failDelete = false
     @Volatile var uploadDelayMs = 0L
+    @Volatile var onUploadSuccess: ((String) -> Unit)? = null
 
     override suspend fun upload(key: String, bytes: ByteArray, contentType: String) {
         if (uploadDelayMs > 0) {
@@ -22,6 +23,7 @@ class FakeStorageClient : StorageClient {
             throw StorageException("Fake upload failure")
         }
         objects[key] = bytes
+        onUploadSuccess?.invoke(key)
     }
 
     override suspend fun createSignedUrl(key: String, expiresInSec: Int): String {

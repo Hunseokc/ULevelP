@@ -7,6 +7,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 private val UUID_REGEX = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -110,10 +111,11 @@ fun JsonObject.requireInstant(name: String): OffsetDateTime {
         }
     }
     val maxInstant = OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)
-    if (parsed < MIN_INSTANT || parsed > maxInstant) {
+    val truncated = parsed.truncatedTo(ChronoUnit.MICROS)
+    if (truncated < MIN_INSTANT || truncated > maxInstant) {
         throw InvalidInputException("${name}은(는) 2000-01-01부터 내일(UTC)까지만 쓸 수 있습니다.")
     }
-    return parsed
+    return truncated
 }
 
 fun JsonObject.requireDouble(name: String, min: Double, max: Double): Double {

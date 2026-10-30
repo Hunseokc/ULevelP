@@ -11,6 +11,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import ulevelp.api.*
 import ulevelp.auth.SupabaseAuthPlugin
 import ulevelp.auth.SupabaseJwtVerifier
@@ -169,7 +171,7 @@ fun Route.registerTakeRoutes(
             val takeId = parsePathUuid(call.parameters["takeId"])
             val trashIds = takeService.delete(user.id, takeId)
             storageTrashService.purge(trashIds)
-            call.respond(HttpStatusCode.OK, mapOf("ok" to true))
+            call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })
         }
     }
 }

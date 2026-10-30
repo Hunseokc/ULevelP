@@ -7,8 +7,13 @@ import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import ulevelp.service.TakeService
+import ulevelp.service.TakeUploadInput
 import kotlinx.serialization.json.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -322,6 +327,12 @@ class TakeApiTest {
         assertEquals(1, fake.objects.size)
         assertEquals(1, fake.deleted.size)
 
+        val savedKey = transaction(db) { TakesTable.selectAll().single()[TakesTable.storageKey] }
+        val deletedKey = fake.deleted.first()
+        assertNotEquals(savedKey, deletedKey, "삭제된 파일 키는 성공한 녹음의 키가 아니어야 합니다.")
+        assertTrue(fake.objects.containsKey(savedKey), "성공한 녹음의 파일은 스토리지에 남아있어야 합니다.")
+        assertFalse(fake.objects.containsKey(deletedKey), "정리된 실패 파일은 스토리지에서 삭제되어야 합니다.")
+
         val trashCount = transaction(db) { StorageTrashTable.selectAll().count() }
         assertEquals(0, trashCount)
     }
@@ -354,6 +365,12 @@ class TakeApiTest {
 
         val trashRows = transaction(db) { StorageTrashTable.selectAll().toList() }
         assertEquals(1, trashRows.size)
+
+        val savedKey = transaction(db) { TakesTable.selectAll().single()[TakesTable.storageKey] }
+        val trashKey = trashRows.first()[StorageTrashTable.storageKey]
+        assertNotEquals(savedKey, trashKey, "trash에 들어간 키는 성공한 녹음의 키가 아니어야 합니다.")
+        assertTrue(fake.objects.containsKey(trashKey), "삭제 실패한 파일은 스토리지에 그대로 남아있어야 합니다.")
+        assertTrue(fake.objects.containsKey(savedKey), "성공한 녹음의 파일도 스토리지에 남아있어야 합니다.")
 
         // 삭제 실패로 인해 fake storage에는 2건 모두 남아있음
         assertEquals(2, fake.objects.size)
@@ -811,5 +828,65 @@ class TakeApiTest {
         val res3 = client.delete("/api/v1/takes/${UUID.randomUUID()}")
         assertEquals(HttpStatusCode.Unauthorized, res3.status)
         assertStandardError(res3.bodyAsText(), 401, "UNAUTHORIZED")
+    }
+
+    @Test
+    fun `T18 코루틴 취소 시에도 NonCancellable로 스토리지 파일 정리`() = runBlocking {
+        val takeService = TakeService(db, fake)
+        val songUuid = UUID.randomUUID()
+        transaction(db) {
+            UsersTable.insert {
+                it[id] = uidA
+                it[email] = "cancel@example.com"
+            }
+            ProfilesTable.insert {
+                it[id] = uidA
+                it[takeQuotaBytes] = 200 * 1024 * 1024L
+            }
+            SongsTable.insert {
+                it[id] = songUuid
+                it[userId] = uidA
+                it[videoId] = "dQw4w9WgXcQ"
+                it[title] = "Cancel Test"
+                it[artist] = "Artist"
+            }
+        }
+
+        val input = TakeUploadInput(
+            songId = songUuid,
+            date = today,
+            recordedAt = OffsetDateTime.now(ZoneOffset.UTC),
+            a = null,
+            b = null,
+            rate = null,
+            durationSec = 10,
+            mime = "audio/mp4",
+            bytes = ByteArray(500)
+        )
+
+        var uploadedKey: String? = null
+        var job: Job? = null
+        fake.onUploadSuccess = { key ->
+            uploadedKey = key
+            job?.cancel(CancellationException("Client disconnected"))
+        }
+
+        val deferred = async {
+            takeService.upload(uidA, input)
+        }
+        job = deferred
+
+        assertFailsWith<CancellationException> {
+            deferred.await()
+        }
+
+        assertNotNull(uploadedKey)
+        // 코루틴이 취소되었어도 NonCancellable 안에서 fake.delete(key)가 실행되어 정리되었음을 검증
+        assertEquals(listOf(uploadedKey), fake.deleted.toList())
+        assertFalse(fake.objects.containsKey(uploadedKey))
+
+        // DB takes는 트랜잭션 롤백으로 0건이어야 함
+        val takesCount = transaction(db) { TakesTable.selectAll().count() }
+        assertEquals(0, takesCount)
     }
 }

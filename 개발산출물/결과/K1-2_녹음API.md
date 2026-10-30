@@ -199,3 +199,25 @@ BUILD SUCCESSFUL in 24s
 2. **Exposed deprecated `slice` API:**
    - Exposed 0.56.0에서 `TakesTable.slice(sumExpr).where { ... }` 형태가 deprecated 및 컴파일 오류를 유발했습니다.
    - `TakesTable.select(sumExpr).where { ... }` 형태로 대체하여 안전하게 쿼터 사용량을 집계하도록 해결했습니다.
+
+---
+
+## 7. PR #12 시니어 리뷰 반영 내역
+
+- **1번 (NonCancellable 정리 보장, 필수):**
+  - `TakeService.kt`에 `cleanupUploadedFile(client, database, key)` 메서드를 `withContext(NonCancellable)` 블록으로 구현. 트랜잭션 B에서 코루틴 취소(`CancellationException`) 또는 예외 발생 시 스토리지 파일 삭제 및 실패 시 `StorageTrashTable` 등록이 취소 문맥에서도 온전히 실행되도록 보장.
+  - 신규 단위/통합 테스트 `T18 코루틴 취소 시에도 NonCancellable로 스토리지 파일 정리` 추가 및 통과 검증.
+- **2번 (T4/T5 테스트 단언 강화):**
+  - `TakeApiTest.kt`의 T4/T5에서 단순 개수 검증 외에, 삭제/trash 적재된 키가 성공한 녹음의 키와 다른지, 스토리지 파일의 잔존/삭제 여부가 올바른지 엄격하게 단언.
+- **3번 (지원 외 MIME 방어):**
+  - `TakeService.kt`의 `MIME_EXT[input.mime] ?: throw InvalidInputException("mime 값이 올바르지 않습니다.")` 검증 추가.
+- **4번 (timestamptz 정밀도 일치):**
+  - `JsonInput.kt`의 `requireInstant`에서 `.truncatedTo(ChronoUnit.MICROS)`를 적용하여 DB 저장 정밀도와 JSON 파싱 시각 일치.
+- **5번 (미사용 import 제거):**
+  - `SongRoutes.kt`의 미사용 `io.ktor.serialization.kotlinx.json.*` import 삭제.
+- **6번 (DELETE 응답 빌더 통일):**
+  - `TakeRoutes.kt` DELETE 응답 본문을 `call.respond(HttpStatusCode.OK, buildJsonObject { put("ok", true) })` 형태로 통일.
+- **체크리스트 일반화 반영:**
+  - `개발산출물/주니어_체크리스트.md`에 2단계 보상 시 `NonCancellable` 사용 규칙, 정리/실패 결과 식별자 배타성 단언 규칙, 응답 빌더 통일 및 미사용 import 금지 규칙 추가.
+
+

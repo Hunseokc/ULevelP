@@ -2,6 +2,8 @@ package ulevelp.service
 
 import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -127,6 +129,29 @@ class TakeService(
         }
     }
 
+    private suspend fun cleanupUploadedFile(
+        client: StorageClient,
+        database: Database,
+        key: String
+    ) {
+        withContext(NonCancellable) {
+            try {
+                client.delete(key)
+            } catch (delEx: Throwable) {
+                log.warn("트랜잭션 실패 후 스토리지 파일($key) 삭제 실패, storage_trash에 등록합니다.", delEx)
+                try {
+                    DatabaseFactory.dbQuery(database) {
+                        StorageTrashTable.insert {
+                            it[storageKey] = key
+                        }
+                    }
+                } catch (trashEx: Throwable) {
+                    log.warn("storage_trash 등록 실패: key=$key", trashEx)
+                }
+            }
+        }
+    }
+
     suspend fun upload(userId: UUID, input: TakeUploadInput): TakeDto {
         val client = storageClient
             ?: throw ApiException(
@@ -170,7 +195,7 @@ class TakeService(
 
         // 2. 트랜잭션 밖: 스토리지 업로드
         val takeId = UUID.randomUUID()
-        val ext = MIME_EXT[input.mime] ?: "m4a"
+        val ext = MIME_EXT[input.mime] ?: throw InvalidInputException("mime 값이 올바르지 않습니다.")
         val key = "$userId/$takeId.$ext"
 
         try {
@@ -266,30 +291,9 @@ class TakeService(
                     memo = ""
                 )
             }
-        } catch (e: CancellationException) {
-            throw e
         } catch (originalEx: Throwable) {
-            // 4. 트랜잭션 B 실패 시 보상 트랜잭션: 스토리지 파일 삭제 시도
-            try {
-                client.delete(key)
-            } catch (delCancel: CancellationException) {
-                throw delCancel
-            } catch (delEx: StorageException) {
-                log.warn("트랜잭션 실패 후 스토리지 파일($key) 삭제 실패, storage_trash에 등록합니다.", delEx)
-                try {
-                    DatabaseFactory.dbQuery(database) {
-                        StorageTrashTable.insert {
-                            it[storageKey] = key
-                        }
-                    }
-                } catch (tCancel: CancellationException) {
-                    throw tCancel
-                } catch (tEx: Exception) {
-                    log.warn("storage_trash 등록 실패: key=$key", tEx)
-                }
-            } catch (delEx: Exception) {
-                log.warn("트랜잭션 실패 후 스토리지 파일($key) 삭제 중 예외", delEx)
-            }
+            // 4. 트랜잭션 B 실패/취소 시 보상 트랜잭션: NonCancellable 안에서 스토리지 파일 삭제/trash 등록
+            cleanupUploadedFile(client, database, key)
             throw originalEx
         }
     }
