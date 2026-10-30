@@ -330,6 +330,7 @@ CREATE TABLE storage_trash (
 
 ### 3.1 연습 시간 누적 합산 및 1분 미만 보류 (`PracticeService.saveProgress`)
 다중 기기 동시 요청 시에도 `sessions` 행이 중복 생성되거나 시간이 유실되지 않도록 단일 트랜잭션 내에서 처리합니다.
+**구현(A0 결정):** raw SQL 대신 같은 의미의 Exposed DSL로 씁니다 — ① `songs` 행을 `SELECT … FOR UPDATE`로 잠가 소유 확인(0행이면 `404 NOT_FOUND`) ② `last_date = max(기존, date)`를 Kotlin에서 계산해 UPDATE ③ 아래 2번 UPDATE ④ 0행이고 60초 이상이면 `INSERT … ON CONFLICT DO NOTHING`(`insertIgnore`), 충돌이면 2번 UPDATE를 한 번 더. ①의 행 잠금으로 같은 곡 저장은 차례로 처리되고, ④는 잠금이 없는 경로(다른 곡 행 등)에 대한 안전장치입니다. 단계별 상세는 `개발산출물/명세/K1-1_구현명세.md` 5.7절. 아래 SQL은 의미 설명용입니다.
 
 ```sql
 -- 1. 곡 위치·구간·속도 갱신 (소유 확인 겸용)
@@ -338,7 +339,7 @@ UPDATE songs
        last_date = GREATEST(COALESCE(last_date, :date), :date)
  WHERE id = :songId AND user_id = :userId
  RETURNING id;
--- 0행이면 남의 곡이거나 없는 곡: 롤백하고 404 SONG_NOT_FOUND. 아래 2·3번으로 가지 않는다
+-- 0행이면 남의 곡이거나 없는 곡: 롤백하고 404 NOT_FOUND. 아래 2·3번으로 가지 않는다
 
 -- 2. 이미 당일 세션이 존재하는지 먼저 UPDATE 시도
 UPDATE sessions
@@ -382,7 +383,7 @@ SELECT COALESCE(SUM(size_bytes), 0) AS used_bytes
 **업로드 순서 (파일과 DB 행이 어긋나지 않게):**
 1. 소유 확인(`songId`가 내 곡인지) + 잠금 없는 쿼터 사전 검사 → 초과면 업로드 전에 413.
 2. 서버가 `takeId`를 먼저 만들고 Storage `{userId}/{takeId}.{ext}`에 업로드 (DB 트랜잭션 밖, 오래 걸려도 잠금 없음).
-3. 짧은 트랜잭션: 위 `FOR UPDATE` 쿼터 재검사 → `ensureSession` → `takes` INSERT → Outbox 적재 → 커밋.
+3. 짧은 트랜잭션: 곡 소유 재확인 → 위 `FOR UPDATE` 쿼터 재검사 → `ensureSession`(없으면 0초·0회 세션 생성, 있으면 그 세션 값은 바꾸지 않음) → `takes` INSERT → Outbox 적재(새 세션이면 `session` 먼저, 그다음 `take`) → 커밋.
 4. 3번이 실패하면 방금 올린 파일을 지운다. 그 삭제마저 실패하면 `storage_trash`에 넣어 cron이 지운다.
 
 ### 3.2.1 삭제 시 스토리지 파일 정리 (`storage_trash`)
@@ -403,16 +404,16 @@ DELETE FROM songs WHERE id = :songId AND user_id = :userId;   -- sessions·takes
 DB 트리거에 숨겨진 전역 세션 변수(`current_setting('app.sync_source')`) 대신, **Kotlin 서비스 계층에서 명시적으로 Outbox 적재 함수를 호출**합니다.
 - **사용자 액션(`SongService`, `PracticeService`, `TakeService`, `NoteService`):** 변경 트랜잭션 커밋 직전에 `outboxRepository.enqueueIfSyncEnabled(userId, entity, entityId, op)`를 호출합니다.
 - **노션에서 가져온 변경(`NotionPullService`):** `enqueueIfSyncEnabled`를 호출하지 않으므로 노션에서 가져온 데이터가 다시 노션으로 Push되는 무한 루프가 원천적으로 발생하지 않습니다.
-- **대기열 중복 방지 쿼리:**
+- **대기열 중복 방지:** 구현은 `OutboxRepository.enqueueIfSyncEnabled`(Exposed DSL, 호출한 트랜잭션 안에서 실행). **중복 제거는 `op = 'upsert'`에만 적용**합니다 — 대기 중인 `upsert`가 있어도 `delete`는 항상 넣습니다(A0 수정: 예전 쿼리는 `delete`까지 건너뛰어 삭제가 노션에 반영되지 않을 수 있었음). 동시 요청으로 `upsert`가 드물게 2건 들어가도 워커가 멱등이므로 무해합니다.
 ```sql
 INSERT INTO sync_outbox (user_id, entity, entity_id, op)
 SELECT :userId, :entity, :entityId, :op
  WHERE EXISTS (SELECT 1 FROM notion_sync WHERE user_id = :userId AND enabled = true)
-   AND NOT EXISTS (
+   AND NOT (:op = 'upsert' AND EXISTS (
      SELECT 1 FROM sync_outbox
       WHERE user_id = :userId AND entity = :entity AND entity_id = :entityId
         AND op = 'upsert' AND done_at IS NULL
-   );
+   ));
 ```
 
 ### 3.4 Outbox 워커 동시 실행 제어 (`NotionPushWorker`)
