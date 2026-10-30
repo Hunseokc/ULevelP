@@ -28,7 +28,7 @@ test('2-note-per-string 은 줄마다 정확히 두 음', () => {
   for (let i = 1; i < ns.length; i++) assert.ok(ns[i].pitch > ns[i - 1].pitch);
 });
 
-test('F# A C# G# 배열은 Dmaj7(#11), Ebm7(b5), Ab7sus4(b9) 로 우길 수 있다', () => {
+test('F# A C# G# 배열은 Dmaj7(#11), Ebm7(b5), Ab7sus4(b9) 로 해석된다', () => {
   const notes = [[2, 4], [3, 2], [4, 2], [5, 4]].map(([s, f]) => ({ s, f, pitch: CT.OPEN[s] + f }));
   const names = CT.interpret(notes).map((x) => x.name);
   assert.ok(names.includes('Dmaj7(#11)'));

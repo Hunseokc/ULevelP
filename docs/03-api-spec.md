@@ -502,5 +502,5 @@
 | `GET /api/circle` | `?root=F&top=2` | 5도권 탑노트 고정 진행 |
 | `GET /api/matrix` | `?root=C&drop=d2&inv=0&span=4` | 드롭 × 전위 × 줄 세트 × 9개 성질 매트릭스 |
 | `GET /api/scale` | `?root=A&type=pentMin&tuning=g6&lo=5&hi=8` (또는 `&circle=5`) | 스케일 구성음 및 지판 위치 / 12키 순환 변화음 |
-| `GET /api/interpret` | `?frets=x,x,4,2,2,4` | 6번줄~1번줄 프렛 배열 코드 재해석 (우기기) |
+| `GET /api/interpret` | `?frets=x,x,4,2,2,4` | 6번줄~1번줄 프렛 배열 코드 재해석 |
 
