@@ -75,7 +75,9 @@ fun Route.registerTakeRoutes(
                                 }
                             }
                             is PartData.FileItem -> {
-                                if (part.name == "file") {
+                                if (part.name == "metadata") {
+                                    metadataRaw = part.provider().readRemaining(65536).readByteArray().toString(Charsets.UTF_8)
+                                } else if (part.name == "file") {
                                     fileBytes = part.provider().readRemaining(TakeService.MAX_FILE_BYTES + 1).readByteArray()
                                 }
                             }

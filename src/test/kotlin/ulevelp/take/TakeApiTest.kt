@@ -975,4 +975,40 @@ class TakeApiTest {
         val trashCount = transaction(db) { StorageTrashTable.selectAll().count() }
         assertEquals(0, trashCount, "storage_trash에 들어가지 않아야 합니다.")
     }
+
+    @Test
+    fun `T20 브라우저 FormData Blob 형태의 metadata 수신 (FileItem 파싱)`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+        val uploadRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            "metadata",
+                            defaultMetadata(songId).toString().toByteArray(Charsets.UTF_8),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "application/json")
+                                append(HttpHeaders.ContentDisposition, "filename=\"blob\"")
+                            }
+                        )
+                        append(
+                            "file",
+                            ByteArray(1000),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Created, uploadRes.status)
+        val json = Json.parseToJsonElement(uploadRes.bodyAsText()).jsonObject
+        assertTrue(json["ok"]!!.jsonPrimitive.boolean)
+        assertNotNull(json["take"]!!.jsonObject["id"]?.jsonPrimitive?.content)
+    }
 }
