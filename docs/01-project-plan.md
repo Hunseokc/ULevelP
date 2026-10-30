@@ -54,7 +54,8 @@ flowchart LR
     CR["Google Cloud Run\n(Kotlin + Ktor API & 워커 서버)"]
     CS["Cloud Scheduler\n(1분 주기 Outbox 트리거)"]
     KMS["Cloud KMS / Secret Manager\n(마스터 암호화 키 · 서버 시크릿)"]
-    GCS["Cloud Storage (또는 Supabase Storage)\n(비공개 버킷: takes)"]
+    CRJ["Cloud Run Jobs\n(analyze 작업, 최대 60분)"]
+    SBS["Supabase Storage\n(비공개 버킷: takes)"]
   end
 
   subgraph DB["Database"]
@@ -75,10 +76,12 @@ flowchart LR
 
   CS -->|"POST /internal/cron/notion-push\n(OIDC 인증)"| CR
   CR <--> PG
-  CR <-->|"Presigned URL / 스트리밍"| GCS
+  CR <-->|"서명 URL / 업로드 스트리밍"| SBS
+  CR -->|"분석 실행 요청 (runWithOverrides)"| CRJ
+  CRJ <--> PG
+  CRJ -->|"영상 분석"| Gemini
   CR <--> KMS
   CR -->|"사용자별 암호화 키 복호화 후 호출"| Notion
-  CR -->|"비동기 영상 분석 (최대 60분)"| Gemini
 ```
 
 ### 3.1 기술 스택 선정
@@ -89,7 +92,7 @@ flowchart LR
 | **직렬화 / JSON** | **kotlinx.serialization** | 리플렉션 없는 고속 JSON 파싱, Gemini 동적 JSON 스키마 및 노션 블록 트리 모델링에 적합 |
 | **DB 접근 / 마이그레이션** | **JetBrains Exposed (DAO/DSL) + HikariCP + Flyway** | Kotlin 네이티브 SQL DSL로 타입 안전한 쿼리 작성, `supabase/migrations` 대신 표준 Flyway(`V1__init.sql`)로 스키마 버전 관리 |
 | **데이터베이스** | **PostgreSQL 16** (Supabase Postgres 또는 Cloud SQL) | JSONB(`analysis`, `config`), 배열(`tags`), `ON CONFLICT` Upsert, `FOR UPDATE SKIP LOCKED` 완벽 지원 |
-| **파일 스토리지** | **Google Cloud Storage (GCS)** 또는 **Supabase Storage** | S3/GCS 호환 Presigned URL(60분 유효) 발급으로 서버 대역폭 소모 없이 안전한 오디오 재생 |
+| **파일 스토리지** | **Supabase Storage** (비공개 버킷 `takes`) | 서버가 서비스 키로 업로드(경로 `{userId}/{takeId}.{ext}`·쿼터는 서버가 강제)하고 60분 유효 서명 URL을 발급해 서버 대역폭 소모 없이 오디오 재생 |
 | **키 암호화 보관** | **AES-256-GCM (Envelope Encryption) + GCP Secret Manager** | DB 종속적인 `vault.secrets` 대신 표준 AES-256-GCM으로 애플리케이션에서 암·복호화하여 `integrations` 테이블에 보관 |
 | **프런트엔드** | **Vanilla JS (ES6+) + CSS 토큰** | 기존 코드베이스(`public/`) 100% 재사용, 빌드 과정 없는 단순성 유지 |
 
@@ -118,9 +121,10 @@ flowchart LR
 | **KC-D3** | **정적 파일 서빙 및 Origin 통합 옵션** | 프런트엔드는 기존처럼 GitHub Pages로 배포하거나 Cloud Run이 정적 파일까지 함께 서빙할 수 있다. Cloud Run 단일 서빙(또는 커스텀 도메인 연결) 시 Same-Origin이 되어 CORS preflight가 사라지고 HTTP CSP 헤더(`frame-ancestors 'none'`)를 완벽히 적용할 수 있다. GitHub Pages 유지 시에도 `ALLOWED_ORIGINS` 화이트리스트로 연동한다. |
 | **KC-D4** | **SQL 프로시저 로직의 애플리케이션 계층 이관** | 기존 설계의 `add_practice`, `save_song_progress`, `apply_notion_pull`, `put_key` 등 PL/pgSQL 함수들을 Kotlin `PracticeService`, `NotionSyncService`, `IntegrationService`의 트랜잭션 메서드로 구현한다. DB는 표준 테이블·외래키·유니크 인덱스에 집중한다. |
 | **KC-D5** | **외부 API 키 보안 (Envelope Encryption)** | 사용자가 등록한 노션 토큰과 Gemini 키는 Ktor 서버에서 마스터 키(Secret Manager 주입) 기반 **AES-256-GCM**(고유 12바이트 IV + 인증 태그)으로 암호화해 DB `integrations` 테이블에 저장한다. 클라이언트 응답에는 절대 원문을 포함하지 않고 끝 4자리(`hint`)만 반환한다. |
-| **KC-D6** | **Gemini 영상 분석의 비동기 실행** | 분석 요청 시 DB `analysis_jobs`에 `queued` 상태로 기록하고 즉시 `202 Accepted` (`{ jobId }`)를 반환한다. 실제 분석은 Ktor의 `CoroutineScope(Dispatchers.IO)` 워커에서 수행하며, Cloud Run의 **요청 범위 밖 CPU 할당(CPU always allocated 또는 비동기 워커 엔드포인트)**을 통해 최대 60분까지 안전하게 완료한다. |
-| **KC-D7** | **노션 실시간 동기화 (Outbox 패턴)** | 곡·세션·녹음·노트 변경 시 같은 DB 트랜잭션 안에서 `sync_outbox` 테이블에 이벤트를 적재한다. 저장 직후 비동기 즉시 트리거(Fast-path)와 Cloud Scheduler의 1분 주기 배치 호출(`POST /internal/cron/notion-push`)을 병행하여 1분 이내 노션 반영을 보장한다. |
+| **KC-D6** | **Gemini 영상 분석의 비동기 실행 (Cloud Run Jobs)** | 분석 요청 시 DB `analysis_jobs`에 `queued` 상태로 기록하고 즉시 `202 Accepted` (`{ jobId }`)를 반환한 뒤, 같은 컨테이너 이미지의 **Cloud Run Job `analyze`**를 `runWithOverrides`(인자 `jobId`)로 실행한다(작업 제한 시간 60분). 서비스 인스턴스 안의 Coroutine 워커는 쓰지 않는다 — Cloud Run 서비스는 응답 후 CPU를 줄이고 유휴 인스턴스를 종료하므로 작업이 `running`에 멈춘다. 1분 cron이 `started_at`이 70분 지난 `running` 작업을 `failed`(`error = 'timeout'`)로 정리한다. |
+| **KC-D7** | **노션 실시간 동기화 (Outbox 패턴 + lease)** | 곡·세션·녹음·노트 변경 시 같은 DB 트랜잭션 안에서 `sync_outbox` 테이블에 이벤트를 적재한다. Cloud Scheduler의 1분 주기 호출(`POST /internal/cron/notion-push`)이 보장 경로이고, 저장 직후 즉시 트리거(Fast-path)는 응답 후 CPU 제한으로 끝까지 못 갈 수 있는 보조 경로다. 사용자별 동시 실행은 `notion_sync.lease_until`(짧은 트랜잭션으로 획득) 으로 막고, 노션 HTTP 호출은 DB 트랜잭션 밖에서 한다. |
 | **KC-D8** | **다중 앱 키 공유 호환 (`app_id`)** | 동일 사용자의 `guitar-practice` 앱과 키 테이블을 공유할 수 있도록 `integrations` 테이블의 복합 PK를 `(user_id, app_id, provider)`로 유지한다. |
+| **KC-D9** | **BYOK & 로컬 저장소 보안 (X1 적용 완료)** | 노션 실시간 연동과 Gemini 학습 노트는 각 키를 등록한 사용자 전용이다(`ulp:keys`에 끝 4자리·갱신 시각만 캐시). 모든 새 localStorage 키는 `ulp:` 접두어를 쓰고, XSS 정적 검사(`test/security.test.js`)와 CSP meta를 모든 HTML에 적용한다. |
 
 ---
 
@@ -131,7 +135,7 @@ flowchart LR
 | 단계 | 주요 작업 내용 | 관련 요구사항 | 예상 소요 | 완료 기준 (Milestone) |
 | --- | --- | --- | --- | --- |
 | **P0. 기반 구축 · 인증 · DB** | • Ktor 프로젝트,マルチ스테이지 Dockerfile, Cloud Run CI/CD 구성<br>• Flyway `V1__init.sql` 작성 및 PostgreSQL 연동<br>• Google OAuth2 로그인 및 JWT 발급/검증 미들웨어<br>• 권한 격리 및 보안 헤더(CSP) 통합 테스트 | `FR-AUTH`<br>`NFR-SEC` | **3 ~ 4일** | 구글 로그인/로그아웃, JWT 인증, 타 사용자 데이터 접근 차단 테스트 통과 |
-| **P1. 플레이어 저장 · 녹음** | • 곡(`songs`), 연습 기록(`sessions`), 녹음(`takes`) API 구현<br>• 1분 미만 연습 시간 보류(`kept`) 및 원자적 시간 합산 로직<br>• 스토리지(GCS/Supabase) 업로드·서명 URL 발급·200MB 쿼터 제한<br>• 비로그인 로컬 기록(`ulp:v:*`, `pp:v:*`) 계정 마이그레이션 API | `FR-SONG`<br>`FR-SESSION`<br>`FR-TAKE`<br>`FR-LOCAL` | **3 ~ 4일** | 노션 설정 없이 구글 로그인만으로 플레이어 자동 저장 및 녹음 업로드/재생 동작 |
+| **P1. 플레이어 저장 · 녹음** | • 곡(`songs`), 연습 기록(`sessions`), 녹음(`takes`) API 구현<br>• 1분 미만 연습 시간 보류(`keep`) 및 원자적 시간 합산 로직<br>• Supabase Storage 업로드·서명 URL 발급·200MB 쿼터 제한<br>• 비로그인 로컬 기록(`ulp:v:*`, `pp:v:*`) 계정 마이그레이션 API | `FR-SONG`<br>`FR-SESSION`<br>`FR-TAKE`<br>`FR-LOCAL` | **3 ~ 4일** | 노션 설정 없이 구글 로그인만으로 플레이어 자동 저장 및 녹음 업로드/재생 동작 |
 | **P2. 인앱 기록 · 보관함 화면** | • 12주 연습 시간 달력 집계 및 주간/월간 통계 API<br>• 곡 상세 타임라인 및 두 녹음 A/B 비교 재생 UI(`log.html`)<br>• 첫 화면(`index.html`) 및 플레이어 곡 목록 서랍을 신규 API로 연결 | `FR-LOG`<br>`FR-LIB` | **2.5 ~ 3일** | 노션을 열지 않고도 앱 내에서 연습 달력, 곡별 기록, 녹음 비교 청취 가능 |
 | **P3. 노션 템플릿 · ZIP 입출력** | • 공식 노션 템플릿 페이지 공개 및 안내 연결<br>• 서비스 → 노션 호환 ZIP(UTF-8 BOM CSV + 오디오 파일) 내보내기<br>• 노션 Markdown & CSV ZIP 업로드 → 미리보기(Dry-run) → 확정 Upsert API | `FR-NX` | **2.5 ~ 3일** | 노션 템플릿 복제 후 CSV 병합 성공, 노션 백업 ZIP 가져오기 왕복 테스트 통과 |
 | **P4. 키 보관 · 노션 실시간 연동** | • AES-256-GCM 키 암호화 저장, 연결 상태 확인(`check`), 해제 API<br>• `sync_outbox` 기반 `NotionPushWorker` (오디오 20MB+ 분할 업로드 포함)<br>• 증분 `NotionPullService` (5분 쿨다운) 및 초기 전체 연동(`full` 모드)<br>• 기존 `apps-script/` 폐기 | `FR-KEY`<br>`FR-SYNC` | **4 ~ 5일** | 노션 키 등록 후 플레이어에서 연습/녹음 시 1분 내 노션 반영, 노션 수정사항 Pull 확인 |
@@ -145,8 +149,9 @@ flowchart LR
 | 리스크 항목 | 영향도 | 대응 전략 |
 | --- | --- | --- |
 | **Cloud Run Cold Start 지연** | 중 | • 무거운 프레임워크 대신 **Ktor + `kotlinx.serialization`**(리플렉션 최소화) 채택<br>• Docker 이미지를 `eclipse-temurin:21-jre-alpine` 기반으로 경량화하고 Cloud Run **Startup CPU Boost** 활성화 (Cold Start 1.5초 이내 달성) |
-| **비동기 Gemini 분석 중 컨테이너 CPU 스로틀링** | 상 | • Cloud Run 기본 설정은 HTTP 응답 반환 후 CPU를 스로틀링하므로, 분석 워커 실행 중에는 **Cloud Run Jobs**를 호출하거나, Cloud Tasks / 내부 스트리밍 워커 엔드포인트를 통해 요청 생명주기 안에서 최대 60분 타임아웃으로 안전하게 실행 |
-| **노션 API Rate Limit (429 Too Many Requests)** | 중 | • `NotionClient`에 지수 백오프(Exponential Backoff) 및 `Retry-After` 헤더 준수 로직 내장<br>• `sync_outbox` 처리 시 사용자별 Advisory Lock 또는 `FOR UPDATE SKIP LOCKED`로 직렬화하고 최대 5회 재시도 후 실패 상태 표시 |
+| **비동기 Gemini 분석 중 컨테이너 CPU 스로틀링** | 상 | • 분석은 서비스 인스턴스가 아니라 **Cloud Run Jobs**에서 실행(KC-D6). Cloud Tasks HTTP 대상은 처리 기한이 최대 30분이라 긴 영상에 부족해 쓰지 않는다<br>• 멈춘 `running` 작업은 1분 cron이 70분 기준으로 `failed` 정리 |
+| **노션 API Rate Limit (429 Too Many Requests)** | 중 | • `NotionClient`에 지수 백오프(Exponential Backoff) 및 `Retry-After` 헤더 준수 로직 내장<br>• `sync_outbox` 처리 시 사용자별 lease(`notion_sync.lease_until`)로 직렬화하고 최대 5회 재시도 후 실패 상태 표시 |
+| **Supabase 무료 플랜 일시정지** | 중 | • 무료 프로젝트는 7일간 활동이 없으면 일시정지된다. DB도 Supabase면 1분 cron의 DB 접근이 활동이 되고, DB가 Cloud SQL이면 cron이 하루 1회 Storage 목록 조회로 활동을 남긴다. 사용자가 늘면 Pro 플랜으로 전환 |
 | **타 사용자 데이터 접근 및 키 유출 보안 사고** | 상 | • 모든 Repository 쿼리에 `userId` 조건을 강제하는 Kotlin 타입 래퍼(`AuthenticatedUser`) 적용<br>• API 키 원문은 AES-256-GCM으로 암호화하며, 복호화 메서드는 `NotionSyncService`와 `GeminiAnalyzeService` 내부에서만 호출 가능하도록 모듈 가시성(`internal`) 제한 |
-| **노션 실시간 연동과 Google Drive 저장 충돌** | 중 | • 백엔드 워커는 사용자의 개인 Google Drive 파일을 백그라운드에서 읽을 수 없으므로, **노션 실시간 연동(`notion_sync.enabled = true`)이 켜진 사용자는 기본 스토리지(GCS/Supabase)를 사용**하도록 강제하고 UI에서 상호 배타적으로 안내 |
+| **노션 실시간 연동과 Google Drive 저장 충돌** | 중 | • 백엔드 워커는 사용자의 개인 Google Drive 파일을 백그라운드에서 읽을 수 없으므로, **노션 실시간 연동(`notion_sync.enabled = true`)이 켜진 사용자는 기본 스토리지(Supabase Storage)를 사용**하도록 강제하고 UI에서 상호 배타적으로 안내 |
 

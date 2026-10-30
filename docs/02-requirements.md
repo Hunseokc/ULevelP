@@ -10,9 +10,9 @@
 | ID | 요구사항명 | 상세 설명 및 인수 조건 |
 | --- | --- | --- |
 | **FR-AUTH-1** | **Google OAuth 로그인 및 로그아웃** | • 상단 메뉴 `LOGIN` 클릭 시 Google OAuth 2.0 동의 화면을 거쳐 로그인하고 원래 보던 페이지로 복귀한다.<br>• 로그아웃 시 브라우저에 저장된 인증 토큰과 키 등록 캐시(`ulp:keys`)가 즉시 삭제된다. |
-| **FR-AUTH-2** | **신규 가입 시 프로필 자동 생성** | • 최초 Google 로그인 시 `users` 및 `profiles` 테이블에 기본값(`role = 'user'`, `storage_provider = 'gcs'`, `take_quota_bytes = 209715200` [200MB])으로 행이 자동 생성된다. |
+| **FR-AUTH-2** | **신규 가입 시 프로필 자동 생성** | • 최초 Google 로그인 시 `users` 및 `profiles` 테이블에 기본값(`role = 'user'`, `storage_provider = 'supabase'`, `take_quota_bytes = 209715200` [200MB])으로 행이 자동 생성된다. |
 | **FR-AUTH-3** | **운영 권한 및 쿼터 변조 방지** | • `profiles.role`(`user` / `owner`)과 `take_quota_bytes`는 서버 API(`PATCH /api/v1/me`) 요청 본문에 포함되더라도 무시·거부되며, 오직 DB 관리자만 변경할 수 있다.<br>• 기능 활성화 여부는 `role`이 아닌 키 등록 여부(`FR-KEY-GATE`)로만 판단한다. |
-| **FR-AUTH-4** | **계정 탈퇴 및 데이터 완전 삭제** | • `SETTING` → 계정 삭제 → 확인 문구 입력 시 `DELETE /api/v1/me`를 호출한다.<br>• 서버는 클라우드 스토리지(`takes/{userId}/*`)의 모든 오디오 파일, 암호화 보관된 외부 API 키, DB의 모든 하위 레코드(`songs`, `sessions`, `takes`, `notes`, `analysis_jobs`, `notion_sync`, `sync_outbox`)를 트랜잭션으로 영구 삭제한다.<br>• 사용자의 Google Drive에 이미 업로드된 파일은 본인 드라이브에 남는다는 점을 사전 안내한다. |
+| **FR-AUTH-4** | **계정 탈퇴 및 데이터 완전 삭제** | • `SETTING` → 계정 삭제 → 확인 문구 입력 시 `DELETE /api/v1/me`를 호출한다.<br>• 서버는 Supabase Storage(`takes/{userId}/*`)의 모든 오디오 파일, 암호화 보관된 외부 API 키, DB의 모든 하위 레코드(`songs`, `sessions`, `takes`, `notes`, `analysis_jobs`, `notion_sync`, `sync_outbox`)를 트랜잭션으로 영구 삭제한다.<br>• 사용자의 Google Drive에 이미 업로드된 파일은 본인 드라이브에 남는다는 점을 사전 안내한다. |
 | **FR-AUTH-5** | **상단 메뉴 계정 상태 표시** | • 모든 페이지 상단 네비게이션 바 우측 끝에 비로그인 시 `LOGIN`, 로그인 시 사용자 이름 이니셜(또는 이메일 앞부분)을 표시한다. 클릭 시 `settings.html` 계정 섹션으로 이동한다. |
 
 ---
@@ -35,7 +35,7 @@
 | ID | 요구사항명 | 상세 설명 및 인수 조건 |
 | --- | --- | --- |
 | **FR-SESSION-1** | **일별·곡별 단일 세션 누적 합산** | • 한 곡에 대해 하루(`date`, `YYYY-MM-DD`)에 하나의 `sessions` 행만 생성한다(`UNIQUE (user_id, song_id, date)`).<br>• 여러 기기(예: 아이패드와 PC)에서 동시에 같은 곡을 연습하고 저장해도 DB `ON CONFLICT DO UPDATE`를 통해 연습 시간(`seconds`)과 반복 횟수(`loops`)가 유실 없이 원자적으로 합산된다. |
-| **FR-SESSION-2** | **1분 미만 신규 세션 생성 보류 (`kept`)** | • 당일 해당 곡의 세션이 아직 없을 때 전달된 연습 시간(`addSeconds`)이 **60초 미만**이면 DB에 행을 생성하지 않고 `{ kept: true, pendingSeconds: addSeconds }`를 반환한다.<br>• 플레이어는 `kept: true`를 받으면 미저장 시간을 초기화하지 않고 유지했다가 다음 자동 저장 시 합산하여 다시 전송한다. (단, 이미 당일 세션 행이 존재하면 60초 미만이어도 즉시 합산한다.) |
+| **FR-SESSION-2** | **1분 미만 신규 세션 생성 보류 (`keep`)** | • 당일 해당 곡의 세션이 아직 없을 때 전달된 연습 시간(`addSeconds`)이 **60초 미만**이면 DB에 행을 생성하지 않고 `{ keep: true, pendingSeconds: addSeconds }`를 반환한다.<br>• 플레이어는 `keep: true`를 받으면 미저장 시간을 초기화하지 않고 유지했다가 다음 자동 저장 시 합산하여 다시 전송한다. (단, 이미 당일 세션 행이 존재하면 60초 미만이어도 즉시 합산한다.) |
 | **FR-SESSION-3** | **사용자 현지 날짜 기준 기록** | • 연습 날짜는 서버 시각이 아닌 사용자 기기의 현지 날짜(`YYYY-MM-DD`)를 기준으로 기록한다. |
 | **FR-SESSION-4** | **구간·속도 최신화 및 세션 메모** | • 연습 기록 저장 시 해당 시점의 연습 구간(`a`, `b`)과 속도(`rate`)로 세션의 최신 상태를 갱신한다.<br>• 기록 화면(`log.html`)에서 각 연습 세션에 대한 메모(`memo`)를 작성·수정할 수 있다. |
 
@@ -48,7 +48,7 @@
 | **FR-TAKE-1** | **플레이어 녹음 및 자동 업로드 흐름** | • 기존 플레이어의 녹음 UX(녹음 시작 → 정지 → 자동 업로드, 실패 시 재시도 버튼 및 로컬 파일 다운로드 버튼 제공)를 그대로 유지한다. |
 | **FR-TAKE-2** | **당일 세션 자동 보장 (`ensureSession`)** | • 녹음 파일 업로드 시 당일 해당 곡의 `sessions` 행이 아직 없으면(연습 시간 1분 미만인 경우 포함), 연습 시간 `0초`, 반복 `0회`인 세션을 자동으로 먼저 생성한 뒤 녹음(`takes`)을 연결한다. |
 | **FR-TAKE-3** | **녹음 메타데이터 기록** | • 각 녹음마다 녹음 시각(`recorded_at`), 당시 구간(`a`, `b`), 속도(`rate`), 재생 길이(`duration_sec`), MIME 타입(`mime`), 파일 크기(`size_bytes`), 저장소 종류(`storage`), 저장소 키(`storage_key`)를 기록한다. |
-| **FR-TAKE-4** | **개인별 스토리지 쿼터(200MB) 제어** | • 기본 스토리지(`gcs` / `supabase`) 사용 시 사용자별 누적 녹음 용량이 `profiles.take_quota_bytes`(기본 200MB)를 초과하면 업로드를 `413 Payload Too Large` (`code: "TAKE_QUOTA_EXCEEDED"`)로 거부한다.<br>• `SETTING` 화면에 현재 사용량 / 전체 한도 막대그래프를 표시한다. |
+| **FR-TAKE-4** | **개인별 스토리지 쿼터(200MB) 제어** | • 기본 스토리지(`supabase`) 사용 시 사용자별 누적 녹음 용량이 `profiles.take_quota_bytes`(기본 200MB)를 초과하면 업로드를 `413 Payload Too Large` (`code: "TAKE_QUOTA_EXCEEDED"`)로 거부한다.<br>• `SETTING` 화면에 현재 사용량 / 전체 한도 막대그래프를 표시한다. |
 | **FR-TAKE-5** | **지원 오디오 포맷 및 파일 크기 제한** | • 지원 MIME: `audio/mp4`(m4a 우선), `audio/webm`(weba), `audio/ogg`, `audio/mpeg`, `audio/wav`, `audio/aac`.<br>• 단일 녹음 파일 최대 크기는 50MB(최대 녹음 시간 30분)로 제한한다. |
 | **FR-TAKE-6** | **녹음 재생 및 삭제** | • 재생 요청 시 60분간 유효한 Presigned URL을 발급하여 브라우저 `<audio>`에서 즉시 스트리밍한다.<br>• 녹음 삭제 시 스토리지의 실제 오브젝트와 DB `takes` 행을 함께 삭제하고 사용량 쿼터를 즉시 반환한다. |
 
@@ -107,7 +107,7 @@
 | **FR-SYNC-2** | **노션 → 서비스 증분 반영 (Pull)** | • 연동을 켠 사용자가 앱을 열 때(마지막 Pull 이후 5분 경과 시) 또는 `SETTING`의 "지금 가져오기" 버튼을 누르면 `POST /api/v1/notion/sync/pull`을 실행한다.<br>• `last_edited_time > last_pull_at`인 노션 페이지를 조회하여, 노션에서 새로 추가한 곡(크롬 확장 프로그램 등으로 넣은 곡 포함), 곡의 제목·아티스트·상태·메모·구간, 연습 기록의 메모를 서비스 DB에 반영한다.<br>• Pull로 인해 반영된 변경사항은 다시 `sync_outbox`에 들어가지 않아야 한다(무한 루프 방지). |
 | **FR-SYNC-3** | **동기화 상태 모니터링** | • `SETTING`에서 현재 동기화 활성화 여부, 대기 중(`pending`) 건수, 5회 이상 실패(`failed`) 건수, 마지막 Push/Pull 시각, 최근 오류 메시지를 확인할 수 있다. |
 | **FR-SYNC-4** | **초기 전체 동기화 (`full` 모드)** | • 처음 "연동 켜기"를 누르면 기존 노션 DB 3개의 전체 데이터(과거 연습 기록 시간·반복 횟수 및 노션에 올라가 있는 녹음 파일 포함)를 읽어 서비스 DB와 스토리지로 이관하고 `notion_links` 매핑을 생성한 뒤 `enabled = true`로 전환한다.<br>• 두 번 실행해도 중복 행이 생기지 않으며(멱등성), 200MB 녹음 한도를 초과하는 녹음 파일은 건너뛰고 건수를 결과에 안내한다. |
-| **FR-SYNC-5** | **구글 드라이브 저장소와의 상호 배타 제어** | • 백엔드 동기화 워커는 사용자의 Google Drive 파일을 백그라운드에서 읽을 수 없으므로, 노션 연동이 켜진 동안에는 녹음 저장소를 기본 클라우드 스토리지로 고정한다(드라이브가 켜진 상태에서 노션 연동을 켜려 하면 드라이브 저장을 먼저 끄도록 안내). |
+| **FR-SYNC-5** | **구글 드라이브 저장소와의 상호 배타 제어** | • 백엔드 동기화 워커는 사용자의 Google Drive 파일을 백그라운드에서 읽을 수 없으므로, 노션 연동이 켜진 동안에는 녹음 저장소를 기본 스토리지(Supabase Storage)로 고정한다(드라이브가 켜진 상태에서 노션 연동을 켜려 하면 드라이브 저장을 먼저 끄도록 안내). |
 
 ---
 
@@ -116,7 +116,7 @@
 | ID | 요구사항명 | 상세 설명 및 인수 조건 |
 | --- | --- | --- |
 | **FR-NOTE-1** | **학습 노트 분석 요청** | • `notes.html`에서 유튜브 URL, 분석 태그(화성, 사운드 디자인, DAW/MIDI, 리듬, 편곡, 믹싱 중 1개 이상), 사용자 메모를 입력해 `POST /api/v1/notes/analyze`로 요청한다.<br>• Gemini 키 미등록 사용자는 버튼이 비활성화되며 `"SETTING에서 Gemini 키 등록"` 안내 링크가 표시된다. |
-| **FR-NOTE-2** | **장시간 비동기 분석 및 진행 상태 조회** | • 서버는 요청 즉시 `analysis_jobs`(`queued`)를 생성해 반환하고, 백그라운드 Coroutine에서 Gemini(`fps=0.2`, `MEDIA_RESOLUTION_LOW`, 태그별 JSON Schema 강제)를 호출한다.<br>• 429/500/503 일시 오류 시 최대 4회 지수 백오프 재시도를 수행하며, 사용자는 브라우저를 닫았다가 다시 열어도 `queued` → `running` → `done` / `failed` 상태를 확인할 수 있다. |
+| **FR-NOTE-2** | **장시간 비동기 분석 및 진행 상태 조회** | • 서버는 요청 즉시 `analysis_jobs`(`queued`)를 생성해 반환하고, Cloud Run Job `analyze`에서 Gemini(`fps=0.2`, `MEDIA_RESOLUTION_LOW`, 태그별 JSON Schema 강제)를 호출한다.<br>• 429/500/503 일시 오류 시 최대 4회 지수 백오프 재시도를 수행하며, 사용자는 브라우저를 닫았다가 다시 열어도 `queued` → `running` → `done` / `failed` 상태를 확인할 수 있다. |
 | **FR-NOTE-3** | **인앱 노트 뷰어 및 지판/건반 SVG 렌더링** | • 분석이 완료되면 `note.html?id={noteId}`에서 한 줄 요약, 핵심 포인트, 태그별 상세 표(코드 진행·신스 패치·DAW 단축키·리듬 그리드·편곡 구간·믹싱 체인), 주요 구간 타임스탬프(`practice.html?v={id}&t={sec}` 연동 링크), 연습 과제 체크리스트를 열람할 수 있다.<br>• 화성 태그 분석 시 기타 프렛 도수 다이어그램(`GuitarSvgRenderer`) 또는 피아노 건반 보이싱 다이어그램(`KeyboardSvgRenderer`) SVG를 Kotlin 서버에서 생성하여 화면과 노션 페이지에 함께 제공한다. |
 | **FR-NOTE-4** | **노션 학습 영상 노트 DB 자동 발행** | • 사용자의 노션 실시간 연동이 켜져 있고 학습 영상 노트 DB ID(`notesDb`)가 등록되어 있으면, 생성된 노트와 SVG 이미지를 노션 페이지(최대 100블록 단위 분할 PATCH 포함)로 자동 생성한다. |
 | **FR-NOTE-5** | **키 삭제 후 노트 영속성 보장** | • 사용자가 추후 Gemini API 키를 연결 해제하더라도 이미 생성된 `notes` 데이터는 본인 계정에 그대로 유지되어 열람 및 ZIP 내보내기가 가능하다. |
@@ -129,7 +129,7 @@
 | --- | --- | --- |
 | **FR-DRIVE-1** | **Google Drive 저장 켜기** | • `SETTING`에서 "녹음을 구글 드라이브에 저장" 활성화 시 Google Identity Services로 `https://www.googleapis.com/auth/drive.file` 권한 동의를 받고, 사용자 드라이브에 `ULeveLP 녹음` 폴더를 생성한 뒤 폴더 ID를 `profiles.drive_folder_id`에 저장한다. |
 | **FR-DRIVE-2** | **드라이브 직접 업로드 및 재생** | • 활성화 이후 새 녹음은 브라우저에서 Google Drive로 직접 업로드(5MB 이하 multipart, 초과 시 resumable)하고, 서버 `takes` 테이블에는 `storage = 'drive'`, `storage_key = <Drive 파일 ID>`만 기록한다(서비스 스토리지 쿼터 미차감).<br>• 재생 시 Drive API `alt=media`로 Blob을 받아 재생하며, 토큰 만료 시 녹음/재생 버튼 클릭 이벤트 내에서 토큰을 갱신한다. |
-| **FR-DRIVE-3** | **기존 녹음 드라이브 이전 및 끄기** | • 기존 클라우드 스토리지에 저장된 녹음들을 한 건씩 Google Drive로 옮기고 스토리지 원본을 삭제하여 쿼터를 비우는 기능을 제공한다.<br>• 드라이브 저장을 끄면 이후 새 녹음만 기본 스토리지에 저장되며 기존 드라이브 파일은 유지된다. |
+| **FR-DRIVE-3** | **기존 녹음 드라이브 이전 및 끄기** | • 기존 Supabase Storage에 저장된 녹음들을 한 건씩 Google Drive로 옮기고 스토리지 원본을 삭제하여 쿼터를 비우는 기능을 제공한다.<br>• 드라이브 저장을 끄면 이후 새 녹음만 기본 스토리지에 저장되며 기존 드라이브 파일은 유지된다. |
 
 ---
 
@@ -141,6 +141,6 @@
 | **보안 (인증/권한)** | **NFR-SEC-2** | • 모든 API 엔드포인트(공개 계산 API 및 `/api/health` 제외)는 유효한 JWT를 요구하며, 모든 DB 쿼리는 인증된 `userId`를 조건절에 강제한다.<br>• 타 사용자의 `songId`나 `sessionId`를 참조해 세션·녹음을 생성하려는 시도는 `403 Forbidden` 또는 `404 Not Found`로 차단한다(사용자 A/B 교차 침투 통합 테스트 필수). |
 | **보안 (시크릿)** | **NFR-SEC-3** | • 브라우저 `localStorage`에는 어떠한 API 키·토큰 원문도 저장하지 않는다(세션 JWT 제외).<br>• 모든 신규 로컬 스토리지 키는 `ulp:` 접두어를 사용하며, 동일 Origin의 타 앱 키(`pp-api`, `pp-key`, `sn-token`)를 읽지 않는다. |
 | **운영 / 비용 보호** | **NFR-OPS-1** | • **Rate Limiting:** Cloud Run 실행 비용 보호를 위해 Gemini 학습 노트 분석은 **사용자당 동시 실행 1건, 일 최대 20건**(`429 RATE_LIMITED`)으로 제한한다.<br>• 노션 수동/자동 Pull은 **사용자당 5분 간격**(`retryAfter` 반환)으로 제한한다. |
-| **디자인 / UX** | **NFR-UX-1** | • 모든 신규 화면(`log.html`, `note.html`, `settings.html` 개편)은 [`DESIGN.md`](../DESIGN.md)의 규칙(웜 뉴트럴 배경, 명도 대비 강조, 파란색은 링크·근음 한정, 필 버튼, 직각 카드, 터치 타겟 최소 44px, 모바일 390px 가로 스크롤 없음)을 준수한다. |
+| **디자인 / UX** | **NFR-UX-1** | • 모든 신규 화면(`log.html`, `note.html`, `settings.html` 개편)은 `public/styles.css` 색 토큰과 다음 규칙(웜 뉴트럴 배경, 명도 대비 강조, 파란색은 링크·근음 한정, 필 버튼, 직각 카드, 터치 타겟 최소 44px, 모바일 390px 가로 스크롤 없음)을 준수한다. |
 | **오프라인 복원력** | **NFR-UX-2** | • 연습 중 일시적으로 네트워크가 끊겨도 플레이어 재생과 연습 시간 카운트는 중단되지 않으며, 연결이 복구되면 누적된 미저장 연습 시간을 다음 자동 저장 요청에 합산하여 전송한다. |
 
