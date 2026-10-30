@@ -98,6 +98,8 @@ object DatabaseFactory {
         return Flyway.configure()
             .dataSource(dataSource)
             .locations(locations)
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
             .load()
             .migrate()
     }
@@ -120,4 +122,3 @@ object DatabaseFactory {
             block()
         }
 }
-
