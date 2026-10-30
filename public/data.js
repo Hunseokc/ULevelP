@@ -58,7 +58,11 @@ window.ULData = (function () {
   }
 
   function saveProgress(body, opts) {
-    requireLogin();
+    try {
+      requireLogin();
+    } catch (e) {
+      return Promise.reject(e);
+    }
     body = body || {};
     opts = opts || {};
     const payload = {

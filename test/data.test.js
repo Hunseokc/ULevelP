@@ -127,7 +127,7 @@ test('D1 비로그인: isLoggedIn()은 false, 다른 함수는 401 NOT_LOGGED_IN
   assert.equal(ULData.isLoggedIn(), false);
 
   await assert.rejects(
-    async () => ULData.songs.list(),
+    () => ULData.songs.list(),
     (err) => {
       assert.equal(err.code, 'NOT_LOGGED_IN');
       assert.equal(err.status, 401);
@@ -136,7 +136,25 @@ test('D1 비로그인: isLoggedIn()은 false, 다른 함수는 401 NOT_LOGGED_IN
   );
 
   await assert.rejects(
-    async () => ULData.saveProgress({ songId: 's', date: '2026-10-30' }),
+    () => ULData.songs.create({ videoId: 'dummy' }),
+    (err) => {
+      assert.equal(err.code, 'NOT_LOGGED_IN');
+      assert.equal(err.status, 401);
+      return true;
+    }
+  );
+
+  await assert.rejects(
+    () => ULData.saveProgress({ songId: 's', date: '2026-10-30' }),
+    (err) => {
+      assert.equal(err.code, 'NOT_LOGGED_IN');
+      assert.equal(err.status, 401);
+      return true;
+    }
+  );
+
+  await assert.rejects(
+    () => ULData.saveProgress({ songId: 's', date: '2026-10-30' }, { keepalive: true }),
     (err) => {
       assert.equal(err.code, 'NOT_LOGGED_IN');
       assert.equal(err.status, 401);
@@ -146,7 +164,7 @@ test('D1 비로그인: isLoggedIn()은 false, 다른 함수는 401 NOT_LOGGED_IN
 
   const dummyBlob = new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/webm' });
   await assert.rejects(
-    async () => ULData.takes.upload({ songId: 's', date: '2026-10-30' }, dummyBlob),
+    () => ULData.takes.upload({ songId: 's', date: '2026-10-30' }, dummyBlob),
     (err) => {
       assert.equal(err.code, 'NOT_LOGGED_IN');
       assert.equal(err.status, 401);

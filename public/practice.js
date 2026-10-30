@@ -632,16 +632,22 @@
     });
   }
 
+  const migrationAttempted = {};
+
   if (window.ULAuth) ULAuth.onChange((state) => {
     if (!started) return;
     const uid = state.user ? state.user.id : null;
     if (uid !== lastUid) {
       lastUid = uid;
       st.song = null; songsCache = null;
+      if (rec.take && !rec.take.done) rec.take.song = null;
       if (uid && st.videoId) refreshSong();
       render();
     }
-    if (state.me && !state.me.migratedLocalAt) runMigration();
+    if (state.me && !state.me.migratedLocalAt && uid && !migrationAttempted[uid]) {
+      migrationAttempted[uid] = true;
+      runMigration();
+    }
   });
 
   window.__pp = { st, rec, save, openSong }; // 디버그용
