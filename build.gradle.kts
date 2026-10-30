@@ -18,7 +18,7 @@ val logbackVersion = "1.5.38"
 val exposedVersion = "0.56.0"
 val flywayVersion = "10.20.1"
 val hikariVersion = "6.2.1"
-val postgresDriverVersion = "42.7.4"
+val postgresDriverVersion = "42.7.7"
 
 dependencies {
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
