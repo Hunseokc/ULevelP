@@ -95,7 +95,7 @@ class ChordEngineTest {
     @Test
     fun `Ktor API 엔드포인트 및 정적 파일 서빙 검증`() = testApplication {
         application {
-            module(dbConfig = null)
+            module(dbConfig = null, authConfig = null)
         }
 
         // 1. /api/health
@@ -151,7 +151,9 @@ class ChordEngineTest {
         assertEquals(HttpStatusCode.OK, scaleCircleRes.status)
         assertEquals(12, Json.parseToJsonElement(scaleCircleRes.bodyAsText()).jsonArray.size)
 
-        assertEquals(HttpStatusCode.BadRequest, client.get("/api/scale?type=nope").status)
+        val badScaleRes = client.get("/api/scale?type=nope")
+        assertEquals(HttpStatusCode.BadRequest, badScaleRes.status)
+        assertTrue(Json.parseToJsonElement(badScaleRes.bodyAsText()).jsonObject["error"]?.jsonPrimitive?.content?.isNotBlank() == true)
 
         // 6. /api/interpret
         assertEquals(HttpStatusCode.BadRequest, client.get("/api/interpret?frets=1,2").status)
@@ -160,7 +162,11 @@ class ChordEngineTest {
         assertTrue(Json.parseToJsonElement(interpRes.bodyAsText()).jsonArray.size >= 4)
 
         // 7. Unknown /api route -> 404
-        assertEquals(HttpStatusCode.NotFound, client.get("/api/not-found").status)
+        val notFoundRes = client.get("/api/not-found")
+        assertEquals(HttpStatusCode.NotFound, notFoundRes.status)
+        val notFoundJson = Json.parseToJsonElement(notFoundRes.bodyAsText()).jsonObject
+        assertEquals("없는 API입니다", notFoundJson["error"]?.jsonPrimitive?.content)
+        assertEquals(8, notFoundJson["apis"]?.jsonArray?.size)
 
         // 8. Static file serving (GET /)
         val indexRes = client.get("/")
