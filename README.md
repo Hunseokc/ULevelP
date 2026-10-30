@@ -12,7 +12,7 @@
 
 디자인 규칙(색, 곡률)은 [DESIGN.md](DESIGN.md) 요약을 따릅니다. 색은 `public/styles.css`의 토큰에 모여 있습니다.
 
-로그인 서비스(Supabase)로 바꾸는 다음 단계의 기획·요구사항·설계·DB 모델은 [docs/](docs/README.md)에 있습니다.
+구글 로그인 기반 다중 사용자 웹 서비스(**Kotlin Ktor + Google Cloud Run**)로 전환하는 다음 단계의 프로젝트 기획·요구사항 정의·API 명세·DB 설계는 [docs/](docs/README.md)에, 단계별 진행 기록은 [개발산출물/진행_코틀린서버.md](개발산출물/진행_코틀린서버.md)에 있습니다.
 
 ## 실행
 

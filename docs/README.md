@@ -1,26 +1,11 @@
-# ULeveLP 다음 단계 문서
+# ULeveLP 차기 설계 문서 (시나리오 B: Kotlin + Google Cloud Run)
 
-ULeveLP를 **누구나 로그인해서 쓰는 서비스**로 바꾸기 위한 기획·요구사항·설계 문서입니다. 이 폴더만 읽고 구현할 수 있도록 썼습니다. 2026-10-28 기준이고, 아직 구현은 시작하지 않았습니다.
+ULeveLP를 **누구나 구글 로그인만으로 쓰는 다중 사용자 웹 서비스**로 확장하면서, 백엔드를 **Kotlin (Ktor) + Google Cloud Run** 단일 컨테이너로 구축하기 위한 설계 문서 모음입니다.
 
-| 문서 | 내용 |
-| --- | --- |
-| [01-plan.md](01-plan.md) | 기획: 배경, 목표, 사용자, 결정 사항과 그 이유, 단계별 일정 |
-| [02-requirements.md](02-requirements.md) | 요구사항: 기능 요구사항(ID, 인수 조건), 비기능 요구사항 |
-| [03-design.md](03-design.md) | 설계: 구성, 인증, 저장, 노션 템플릿·내보내기·가져오기·연동, Gemini, 화면, 외부 설정 |
-| [04-data-model.md](04-data-model.md) | DB 모델: 테이블 DDL, RLS, 함수, 저장소 정책, 노션 속성 대응표, CSV 형식 |
+| 순서 | 문서 | 핵심 내용 |
+| --- | --- | --- |
+| **01** | [01-project-plan.md](01-project-plan.md) | **프로젝트 기획서:** 추진 배경, 기존 BaaS 설계 대비 Cloud Run 전환 이점, 전체 아키텍처, 기술 스택, 핵심 의사결정(KC-D1~D8), P0~P6 단계별 일정 및 소요(2.5~4주), 리스크 대응 |
+| **02** | [02-requirements.md](02-requirements.md) | **요구사항 정의서:** 인증(`FR-AUTH`), 곡(`FR-SONG`), 연습 세션(`FR-SESSION`), 녹음(`FR-TAKE`), 로컬 이관(`FR-LOCAL`), 기록/보관함 화면(`FR-LOG`/`FR-LIB`), 노션 입출력(`FR-NX`), 키 관리(`FR-KEY`), 실시간 연동(`FR-SYNC`), AI 학습 노트(`FR-NOTE`), 구글 드라이브(`FR-DRIVE`), 비기능 요구사항(`NFR`) |
+| **03** | [03-api-spec.md](03-api-spec.md) | **기능 API 명세서:** 공통 인증·에러 규격, 도메인별 전체 REST API 엔드포인트(`Auth`, `Songs`, `Practice & Sessions`, `Takes`, `Integrations`, `Notion Sync`, `Export/Import`, `Notes`, `Chord Lab`) 요청/응답 JSON 스펙 |
+| **04** | [04-db-design.md](04-db-design.md) | **DB 설계서:** ERD, PostgreSQL 16 표준 DDL(`V1__init.sql`), AES-256-GCM 키 암호화 구조, 원자적 연습 시간 합산·쿼터 잠금·Outbox 동기화 SQL 패턴, 노션 템플릿 1:1 매핑표 |
 
-읽는 순서는 01 → 02 → 04 → 03입니다. 구현은 [01-plan.md의 단계](01-plan.md#7-단계별-일정)를 따릅니다.
-
-## 지금 코드의 위치 (as-is)
-
-| 경로 | 역할 |
-| --- | --- |
-| `public/index.html` | 첫 화면 (링크 붙여넣기, CHORDS·PLAYER 프레임) |
-| `public/chords.html`, `app.js`, `lib/*.js` | 코드 연습실. 계산은 전부 브라우저에서 함 |
-| `public/practice.html/.js/.css` | 유튜브 구간 연습 플레이어, 녹음. 노션 링크가 이 주소를 씀 (이름 바꾸지 말 것) |
-| `public/notes.html` | 학습 노트 요청 (GitHub Actions 실행) |
-| `public/settings.html`, `site.js`, `site.css` | 설정, 공통 메뉴·호출 |
-| `apps-script/Code.gs` | 노션 중계 서버 (Google Apps Script). `/songs` `/song` `/save` `/record` `/health` |
-| `scripts/analyze.py`, `schemas.py`, `guitar.py`, `keyboard.py` | Gemini 영상 분석 → 노션 페이지 (GitHub Actions `analyze.yml`) |
-| `server.js` | 로컬 개발용 정적 서버 + 코드 계산 API. Docker 이미지도 이것 |
-| `DESIGN.md` | 디자인 규칙. 새 화면도 이 규칙을 따름 |
