@@ -60,7 +60,7 @@ const STORAGE_PREFIXES = ['ulp:', 'sb-'];
 // 옛 키 허용 목록 (R2 결과 7.3, docs/03 2.5). until = 이 키를 지우는 step. onlyIn = 이 파일에서만(처음 한 번 복사할 때 읽기)
 const COPY_ONLY = { onlyIn: ['public/theme.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)' };
 const STORAGE_LEGACY = [
-  { key: 'pp:v:', prefix: true, until: 'P1-2', why: '비로그인 기기 기록. P1-2에서 ulp:v:로 바꾸고, 옛 키는 P1-4 가져오기에서 읽기만' },
+  { key: 'pp:v:', prefix: true, onlyIn: ['public/data.js'], until: '지우지 않음(guitar-practice가 같은 Origin에서 씀)', why: '자매 앱 기기 기록. 첫 로그인 이관(FR-LOCAL-2)에서 읽기만' },
   { key: 'pp-api', until: 'P4-5', why: 'Apps Script 중계 주소(SETTING 노션 연결 칸, practice.html#api=)' },
   { key: 'pp-key', until: 'P4-5', why: 'Apps Script 공유 비밀(같은 칸)' },
   { key: 'sn-token', until: 'P5-3', why: 'GitHub 토큰(SETTING 학습 노트 칸)' },
@@ -77,6 +77,7 @@ const STORAGE_ARG_ALLOW = [
   { file: 'public/practice.js', expr: 'k', why: 'store 래퍼 안. 부르는 쪽의 키를 검사한다' },
   { file: 'public/theme.js', expr: 'from', why: '옛 키 복사 표(이 파일 안 상수)' },
   { file: 'public/theme.js', expr: 'to', why: '옛 키 복사 표(이 파일 안 상수)' },
+  { file: 'public/data.js', expr: 'k', why: '이관할 키 목록(ulp:v:·pp:v: 접두어로 거른 localStorage.key 값)을 읽음' },
 ];
 
 // (f) 브라우저에 있으면 안 되는 비밀 값 모양

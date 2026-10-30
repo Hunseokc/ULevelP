@@ -1,6 +1,9 @@
-// 연습 플레이어: 유튜브 임베드 + 속도 버튼 + A-B 구간 반복 + 노션 자동 저장(중계 서버 경유)
+// 연습 플레이어: 유튜브 임베드 + 속도 버튼 + A-B 구간 반복 + 계정 자동 저장(ULData)
 'use strict';
 (function () {
+  const D = window.ULData;
+  const loggedIn = () => !!(D && D.isLoggedIn());
+
   const RATES = [0.25, 0.5, 0.75, 1];
   const LEADS = [0, 1, 2];
   const AUTOSAVE_MS = 30000;
@@ -42,39 +45,6 @@
   };
   let player = null, ytReady = false, pendingLoad = null;
 
-  // ---------- 중계 서버(API, Apps Script 웹 앱) ----------
-  // Apps Script는 커스텀 헤더·preflight를 못 받아서 모든 요청을 text/plain POST 하나로 보낸다
-  const api = {
-    url() { return (store.get('pp-api', '') || '').trim(); },
-    key() { return store.get('pp-key', ''); },
-    ok() { return !!(this.url() && this.key()); },
-    async call(path, body, opts) {
-      if (!this.ok()) throw new Error('노션 연결 설정이 필요해요');
-      const [route, qs] = path.split('?');
-      const res = await fetch(this.url(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          key: this.key(), path: route, method: body ? 'POST' : 'GET',
-          query: Object.fromEntries(new URLSearchParams(qs || '')), body: body || {},
-        }),
-        keepalive: !!(opts && opts.keepalive),
-      });
-      const data = await res.json().catch(() => ({ error: '서버 응답을 읽지 못했어요 (' + res.status + ')' }));
-      if (data.error) throw new Error(data.error);
-      return data;
-    },
-  };
-
-  // 노션 임베드 등에서 한 번에 설정: practice.html#api=...&k=...
-  (function readHashSetup() {
-    if (!location.hash) return;
-    const h = new URLSearchParams(location.hash.slice(1));
-    if (h.get('api')) store.set('pp-api', h.get('api'));
-    if (h.get('k')) store.set('pp-key', h.get('k'));
-    if (h.get('api') || h.get('k')) history.replaceState(null, '', location.pathname + location.search);
-  })();
-
   // ---------- 화면 ----------
   const rateBtns = RATES.map((r) => {
     const b = document.createElement('button');
@@ -93,7 +63,7 @@
   function setSync(msg, err) { syncMsg = msg; syncErr = !!err; renderSync(); }
   function renderSync() {
     const el = $('syncState');
-    el.textContent = syncMsg || (st.song ? '노션 연결됨' : '');
+    el.textContent = syncMsg || (st.song ? '계정 연결됨' : '');
     el.classList.toggle('err', syncErr);
   }
 
@@ -114,7 +84,7 @@
     $('songTitle').textContent = st.song ? st.song.title : (st.videoId ? (videoTitle() || '연습 플레이어') : '연습 플레이어');
     $('emptyState').hidden = !!st.videoId;
     const save = $('saveBtn');
-    save.textContent = api.ok() && st.videoId && !st.song ? '노션 추가' : '저장';
+    save.textContent = loggedIn() && st.videoId && !st.song ? '곡 추가' : '저장';
     save.disabled = !st.videoId;
     save.classList.toggle('dirty', st.dirty);
     renderBar();
@@ -308,18 +278,18 @@
   function snapshot() {
     return { videoId: st.videoId, pos: st.ready ? currentPos() : st.startAt, a: st.a, b: st.b, rate: st.rate };
   }
-  // 노션 연결이 없어도 이 기기와 주소창에는 남긴다
+  // 계정 연결이 없어도 이 기기와 주소창에는 남긴다
   function persistLocal() {
     if (!st.videoId) return;
     const s = snapshot();
-    store.set('pp:v:' + st.videoId, s);
+    store.set('ulp:v:' + st.videoId, Object.assign({}, s, { date: today() }));
     try { history.replaceState(null, '', resumeUrl(s)); } catch (e) { /* 무시 */ }
   }
 
   async function ensureSong() {
     if (st.song) return st.song;
-    const r = await api.call('/song', { videoId: st.videoId, title: videoTitle(), artist: videoAuthor(), rate: st.rate });
-    st.song = r.song;
+    const song = await D.songs.create({ videoId: st.videoId, title: videoTitle(), artist: videoAuthor(), rate: st.rate });
+    st.song = song;
     songsCache = null;
     return st.song;
   }
@@ -327,8 +297,8 @@
   async function save(reason, opts) {
     if (!st.videoId) return;
     persistLocal();
-    if (!api.ok()) { if (reason === 'manual') { setSync('노션 연결 설정이 필요해요 (SETTING)', true); openLib(); } return; }
-    if (!st.song && reason !== 'manual') return; // 노션에 없는 곡은 '노션 추가'를 눌렀을 때만
+    if (!loggedIn()) { if (reason === 'manual') setSync('이 기기에 저장됨 · 로그인하면 계정에 저장돼요'); return; }
+    if (!st.song && reason !== 'manual') return; // 계정에 없는 곡은 '곡 추가'를 눌렀을 때만
     if (st.saving) { st.savePending = true; return; }
     const addSec = Math.floor(st.unsavedSec);
     const addLoops = st.unsavedLoops;
@@ -337,12 +307,11 @@
     st.saving = true;
     setSync('저장 중…');
     try {
-      const song = await ensureSong();
+      const song = st.song || await ensureSong();
       const s = snapshot();
-      const r = await api.call('/save', {
-        songId: song.id, videoId: s.videoId, pos: s.pos, a: s.a, b: s.b, rate: s.rate,
-        date: today(), title: song.title, addSeconds: addSec, addLoops,
-        resumeUrl: resumeUrl(s),
+      const r = await D.saveProgress({
+        songId: song.id, pos: s.pos, a: s.a, b: s.b, rate: s.rate,
+        date: today(), addSeconds: addSec, addLoops,
       }, opts);
       // keep: 아직 1분이 안 돼서 연습 기록을 만들지 않음 → 시간은 다음 저장에 다시 보냄
       if (!r.keep) { st.unsavedSec -= addSec; st.unsavedLoops -= addLoops; }
@@ -351,7 +320,12 @@
       const d = new Date();
       setSync('저장됨 ' + pad(d.getHours()) + ':' + pad(d.getMinutes()));
     } catch (e) {
-      setSync(e.message || '저장 실패', true);
+      if (e && e.status === 404) {
+        st.song = null;
+        setSync('계정에서 지워진 곡이에요. 곡 추가를 누르면 다시 만들어요', true);
+      } else {
+        setSync((e && e.message) || '저장 실패', true);
+      }
     } finally {
       st.saving = false;
       render();
@@ -375,8 +349,8 @@
   }
 
   // ---------- 녹음 ----------
-  // 멈추면 바로 노션 중계 서버로 올림. 실패하면 이 화면에 남겨 두고 다시 올리거나 파일로 저장
-  const REC_MAX_SEC = 30 * 60; // 중계 서버 요청 크기(약 50MB) 안에 들어가도록
+  // 멈추면 바로 계정 저장소로 올림. 실패하면 이 화면에 남겨 두고 다시 올리거나 파일로 저장
+  const REC_MAX_SEC = 30 * 60; // 서버 녹음 한도(50MB)
   const REC_TYPES = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
   const REC_EXT = { 'audio/mp4': 'm4a', 'audio/webm': 'weba', 'audio/ogg': 'ogg' };
   const rec = { mr: null, stream: null, chunks: [], startedAt: 0, meta: null, take: null, uploading: false };
@@ -402,7 +376,7 @@
   async function startRec() {
     if (rec.mr || !st.videoId) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) { setRec('이 브라우저는 녹음을 지원하지 않아요', true); return; }
-    if (rec.take && !rec.take.done && !confirm('아직 노션에 못 올린 녹음이 있어요. 버리고 새로 녹음할까요?')) return;
+    if (rec.take && !rec.take.done && !confirm('아직 계정에 못 올린 녹음이 있어요. 버리고 새로 녹음할까요?')) return;
     try {
       // 악기 소리가 깎이지 않도록 통화용 보정은 끔
       rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
@@ -413,7 +387,7 @@
     const type = REC_TYPES.find((x) => MediaRecorder.isTypeSupported(x)) || '';
     const mr = new MediaRecorder(rec.stream, Object.assign({ audioBitsPerSecond: 128000 }, type ? { mimeType: type } : {}));
     rec.chunks = [];
-    rec.meta = { videoId: st.videoId, song: st.song, date: today(), time: hhmm(), a: st.a, b: st.b, rate: st.rate };
+    rec.meta = { videoId: st.videoId, song: st.song, date: today(), time: hhmm(), a: st.a, b: st.b, rate: st.rate, recordedAt: new Date().toISOString() };
     mr.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
     mr.onstop = () => {
       const mime = (mr.mimeType || type || 'audio/webm').split(';')[0];
@@ -442,33 +416,30 @@
     a.download = (t.date + ' ' + t.time.replace(':', '') + ' ' + ((t.song && t.song.title) || '녹음')).replace(/[\\/:*?"<>|]+/g, ' ') + '.' + (REC_EXT[t.mime] || 'webm');
   }
 
-  function toBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(',')[1] || '');
-      r.onerror = () => reject(new Error('녹음 파일을 읽지 못했어요'));
-      r.readAsDataURL(blob);
-    });
-  }
-
   async function uploadTake() {
     const t = rec.take;
     if (!t || t.done || rec.uploading) return;
-    if (!api.ok()) { setRec('노션 연결 설정이 필요해요. 파일로 저장해 둘 수 있어요', true); return; }
+    if (!loggedIn()) { setRec('로그인하면 녹음을 계정에 올릴 수 있어요. 파일로 저장해 둘 수 있어요', true); return; }
     rec.uploading = true;
     setRec('녹음 올리는 중…');
     try {
       // 녹음하는 동안 다른 곡으로 넘어갔으면 녹음 시작 때의 곡으로 올림
       if (!t.song && st.videoId === t.videoId) t.song = await ensureSong();
-      if (!t.song) throw new Error('곡 정보가 없어요. 노션 추가 후 다시 올려주세요');
-      const r = await api.call('/record', {
-        songId: t.song.id, videoId: t.videoId, title: t.song.title, date: t.date, time: t.time,
-        a: t.a, b: t.b, rate: t.rate, seconds: t.seconds, mime: t.mime, data: await toBase64(t.blob),
-      });
+      if (!t.song) throw new Error('곡 정보가 없어요. 곡 추가 후 다시 올려 주세요');
+      t.serverTake = await D.takes.upload({
+        songId: t.song.id,
+        date: t.date,
+        recordedAt: t.recordedAt,
+        a: t.a,
+        b: t.b,
+        rate: t.rate,
+        durationSec: t.seconds,
+        mime: t.mime,
+      }, t.blob);
       t.done = true;
-      setRec(r.warning ? '연습 기록 본문에 저장됨 · ' + r.warning : '노션에 저장됨 ' + t.time + ' · ' + fmt(t.seconds), !!r.warning);
+      setRec('계정에 저장됨 ' + t.time + ' · ' + fmt(t.seconds));
     } catch (e) {
-      setRec(e.message || '녹음 업로드 실패', true);
+      setRec((e && e.message) || '녹음 업로드 실패', true);
     } finally {
       rec.uploading = false;
       renderRec();
@@ -492,14 +463,18 @@
     Object.assign(st, { song: null, a: null, b: null, loopOn: false, loops: 0, unsavedSec: 0, unsavedLoops: 0, dirty: false });
     setSync('');
 
-    // 우선순위: 주소의 값 > 노션 > 이 기기 기록
-    const local = store.get('pp:v:' + id, null);
+    // 우선순위: 주소의 값 > 계정 > 이 기기 기록
+    const local = store.get('ulp:v:' + id, null);
     let src = opts.params || null;
     let song = opts.song || null;
-    if (!song && api.ok()) {
-      setSync('노션 확인 중…');
-      try { song = (await api.call('/song?v=' + encodeURIComponent(id))).song; setSync(song ? '노션 기록 불러옴' : '노션에 없는 곡'); }
-      catch (e) { setSync(e.message, true); }
+    if (!song && loggedIn()) {
+      setSync('계정 기록 확인 중…');
+      try {
+        song = await D.songs.byVideo(id);
+        setSync(song ? '계정 기록 불러옴' : '계정에 없는 곡');
+      } catch (e) {
+        setSync((e && e.message) || '계정 기록 확인 실패', true);
+      }
     }
     st.song = song;
     const base = src || song || local || {};
@@ -523,10 +498,10 @@
     if ($('lib').hidden) return;
     ul.textContent = '';
     const msg = (t) => { const li = document.createElement('li'); li.className = 'note'; li.textContent = t; ul.appendChild(li); };
-    if (!api.ok()) return msg('아래 노션 연결 설정을 하면 노션의 연습 곡이 여기 보여요.');
+    if (!loggedIn()) return msg('로그인하면 내 연습 곡이 여기 보여요.');
     if (!songsCache) return msg('불러오는 중…');
     if (songsCache.error) return msg(songsCache.error);
-    if (!songsCache.length) return msg('아직 곡이 없어요. 링크를 붙여넣어 열고 노션 추가를 누르세요.');
+    if (!songsCache.length) return msg('아직 곡이 없어요. 링크를 붙여넣어 열고 곡 추가를 누르세요.');
     songsCache.forEach((s) => {
       const li = document.createElement('li');
       const b = document.createElement('button');
@@ -546,10 +521,10 @@
     });
   }
   async function loadSongs() {
-    if (!api.ok()) { renderSongs(); return; }
+    if (!loggedIn()) { renderSongs(); return; }
     songsCache = null; renderSongs();
-    try { songsCache = (await api.call('/songs')).songs || []; }
-    catch (e) { songsCache = []; songsCache.error = e.message; }
+    try { songsCache = await D.songs.list(); }
+    catch (e) { songsCache = []; songsCache.error = (e && e.message) || '곡 목록을 불러오지 못했어요'; }
     renderSongs();
   }
   // 노션 연결 설정은 settings.html에서
@@ -606,14 +581,68 @@
   // ---------- 시작 ----------
   const q = new URLSearchParams(location.search);
   const startId = videoIdFrom(q.get('v') || '');
+  let started = false, lastUid = null;
   render();
-  if (startId) {
-    const params = (q.has('a') || q.has('b') || q.has('r') || q.has('t'))
-      ? { a: num(q.get('a')), b: num(q.get('b')), rate: num(q.get('r')) || 1, t: num(q.get('t')) }
-      : null;
-    openSong(startId, { params });
-  } else if (!api.ok()) {
-    setSync('');
+  (async function start() {
+    // 저장된 로그인 세션을 먼저 읽는다 (ULAuth.init보다 먼저 실행되므로)
+    if (window.ULAuth) await ULAuth.getAccessToken();
+    const u = window.ULAuth && ULAuth.getUser();
+    lastUid = u ? u.id : null;
+    started = true;
+    if (startId) {
+      const params = (q.has('a') || q.has('b') || q.has('r') || q.has('t'))
+        ? { a: num(q.get('a')), b: num(q.get('b')), rate: num(q.get('r')) || 1, t: num(q.get('t')) }
+        : null;
+      await openSong(startId, { params });
+    }
+  })();
+
+  function refreshSong() {
+    const id = st.videoId;
+    if (!id || !D) return;
+    D.songs.byVideo(id).then((song) => {
+      if (st.videoId !== id || st.song) return;
+      if (song) {
+        st.song = song;
+        setSync('계정 기록 불러옴');
+      } else {
+        setSync('계정에 없는 곡');
+      }
+      render();
+    }).catch((e) => {
+      if (st.videoId !== id) return;
+      setSync((e && e.message) || '계정 기록 확인 실패', true);
+      render();
+    });
   }
-  window.__pp = { st, save, openSong }; // 디버그용
+
+  function runMigration() {
+    if (!D) return;
+    D.runLocalMigration().then((r) => {
+      if (!r) return;
+      if (r.status === 'done') {
+        setSync('기기 기록 ' + r.created + '곡을 계정으로 옮겼어요');
+        songsCache = null;
+        if (st.videoId && !st.song) refreshSong();
+      } else if (r.status === 'failed') {
+        setSync(r.message, true);
+      }
+    }).catch((e) => {
+      setSync((e && e.message) || '기기 기록 이관 실패', true);
+    });
+  }
+
+  if (window.ULAuth) ULAuth.onChange((state) => {
+    if (!started) return;
+    const uid = state.user ? state.user.id : null;
+    if (uid !== lastUid) {
+      lastUid = uid;
+      st.song = null; songsCache = null;
+      if (uid && st.videoId) refreshSong();
+      render();
+    }
+    if (state.me && !state.me.migratedLocalAt) runMigration();
+  });
+
+  window.__pp = { st, rec, save, openSong }; // 디버그용
 })();

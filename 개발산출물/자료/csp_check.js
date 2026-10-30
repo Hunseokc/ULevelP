@@ -40,6 +40,8 @@ const PAGES = [
   { name: '코드 연습실 전체 탭', url: 'chords.html', act: `(() => { ['tone','matrix','circle','reint','tf','scale'].forEach((t) => document.getElementById('tab-' + t).click()); document.getElementById('a-go').click(); document.getElementById('cc-all').open = true; })()`,
     expect: `({ svgs: document.querySelectorAll('svg').length, strokeAttr: !!document.querySelector('line.str[stroke-width]'), styleAttr: document.querySelectorAll('[style]').length })` },
   { name: '플레이어 + 유튜브', url: `practice.html?v=${VIDEO}`, wait: 6000, expect: `({ iframe: !!document.querySelector('iframe[src*="youtube.com/embed"]'), title: document.getElementById('songTitle').textContent })` },
+  { name: '플레이어 비로그인 기기 저장', url: `practice.html?v=${VIDEO}`, wait: 6000, act: `document.getElementById('saveBtn').click()`,
+    expect: `({ local: localStorage.getItem('ulp:v:${VIDEO}'), old: localStorage.getItem('pp:v:${VIDEO}'), sync: document.getElementById('syncState').textContent })` },
   { name: '학습 노트 + GitHub API(connect-src)', url: 'notes.html?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D' + VIDEO, before: { 'sn-token': 'x', 'sn-repo': 'Hunseokc/ULevelP' },
     expect: `({ preview: document.querySelector('#preview img').src, runs: document.getElementById('runs').textContent.slice(0, 60) })` },
   { name: '설정 + 테마 버튼', url: 'settings.html', act: `document.querySelector('[data-theme="light"]').click()`,
