@@ -3,13 +3,17 @@ package ulevelp.api
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import kotlinx.serialization.json.*
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 private val UUID_REGEX = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 private val DATE_REGEX = Regex("^\\d{4}-\\d{2}-\\d{2}$")
 private val MIN_DATE = LocalDate.of(2000, 1, 1)
+private val MIN_INSTANT = OffsetDateTime.of(2000, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC)
 
 suspend fun ApplicationCall.receiveJsonObject(): JsonObject {
     val raw = receiveText()
@@ -88,6 +92,32 @@ fun JsonObject.requireDate(name: String): LocalDate {
     return parsed
 }
 
+fun JsonObject.requireInstant(name: String): OffsetDateTime {
+    val element = this[name] ?: throw InvalidInputException("$name 값이 필요합니다.")
+    if (element is JsonNull) {
+        throw InvalidInputException("$name 값이 필요합니다.")
+    }
+    if (element !is JsonPrimitive || !element.isString) {
+        throw InvalidInputException("$name 형식이 올바르지 않습니다.")
+    }
+    val raw = element.content.trim()
+    val parsed = try {
+        OffsetDateTime.parse(raw).withOffsetSameInstant(ZoneOffset.UTC)
+    } catch (_: Exception) {
+        try {
+            Instant.parse(raw).atOffset(ZoneOffset.UTC)
+        } catch (_: Exception) {
+            throw InvalidInputException("$name 형식이 올바른 ISO-8601 시각이 아닙니다.")
+        }
+    }
+    val maxInstant = OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)
+    val truncated = parsed.truncatedTo(ChronoUnit.MICROS)
+    if (truncated < MIN_INSTANT || truncated > maxInstant) {
+        throw InvalidInputException("${name}은(는) 2000-01-01부터 내일(UTC)까지만 쓸 수 있습니다.")
+    }
+    return truncated
+}
+
 fun JsonObject.requireDouble(name: String, min: Double, max: Double): Double {
     val element = this[name] ?: throw InvalidInputException("$name 값이 필요합니다.")
     if (element is JsonNull) {
@@ -114,6 +144,22 @@ fun JsonObject.optDouble(name: String, min: Double, max: Double): Double? {
         throw InvalidInputException("${name}은(는) $min~$max 범위여야 합니다.")
     }
     return value
+}
+
+fun JsonObject.requireInt(name: String, min: Int, max: Int): Int {
+    val element = this[name] ?: throw InvalidInputException("$name 값이 필요합니다.")
+    if (element is JsonNull) {
+        throw InvalidInputException("$name 값이 필요합니다.")
+    }
+    if (element !is JsonPrimitive || element.isString) {
+        throw InvalidInputException("$name 형식이 올바르지 않습니다.")
+    }
+    val longVal = element.content.toLongOrNull()
+        ?: throw InvalidInputException("$name 형식이 올바르지 않습니다.")
+    if (longVal < min || longVal > max) {
+        throw InvalidInputException("${name}은(는) $min~$max 범위여야 합니다.")
+    }
+    return longVal.toInt()
 }
 
 fun JsonObject.optInt(name: String, min: Int, max: Int, default: Int): Int {

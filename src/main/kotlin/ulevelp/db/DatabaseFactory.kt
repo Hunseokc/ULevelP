@@ -3,6 +3,9 @@ package ulevelp.db
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.output.MigrateResult
 import org.jetbrains.exposed.sql.Database
@@ -118,7 +121,12 @@ object DatabaseFactory {
     }
 
     suspend fun <T> dbQuery(db: Database? = null, block: suspend Transaction.() -> T): T =
-        newSuspendedTransaction(Dispatchers.IO, db) {
-            block()
+        withContext(Dispatchers.IO) {
+            newSuspendedTransaction(db = db) {
+                currentCoroutineContext().ensureActive()
+                val result = block()
+                currentCoroutineContext().ensureActive()
+                result
+            }
         }
 }

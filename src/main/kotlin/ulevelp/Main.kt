@@ -26,11 +26,16 @@ import ulevelp.routes.registerChordRoutes
 import ulevelp.routes.registerMeRoutes
 import ulevelp.routes.registerPracticeRoutes
 import ulevelp.routes.registerSongRoutes
+import ulevelp.routes.registerTakeRoutes
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
+import ulevelp.service.StorageTrashService
+import ulevelp.service.TakeService
 import ulevelp.service.VideoMetaClient
 import ulevelp.service.YoutubeOEmbedClient
+import ulevelp.storage.StorageClient
+import ulevelp.storage.SupabaseStorageClient
 import java.io.File
 import java.net.URI
 
@@ -65,7 +70,8 @@ fun Application.module(
     authConfig: SupabaseAuthConfig? = SupabaseAuthConfig.fromEnvOrNull(),
     allowedOrigins: List<String> = parseAllowedOrigins(System.getenv("ALLOWED_ORIGINS")),
     videoMetaClient: VideoMetaClient = YoutubeOEmbedClient(),
-    publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL"))
+    publicAppUrl: String = parsePublicAppUrl(System.getenv("PUBLIC_APP_URL")),
+    storageClient: StorageClient? = SupabaseStorageClient.fromEnvOrNull()
 ) {
     val db: Database? = if (dbConfig != null) {
         val (dataSource, database) = DatabaseFactory.init(dbConfig)
@@ -85,9 +91,15 @@ fun Application.module(
         null
     }
 
+    if (storageClient == null) {
+        environment.log.warn("녹음 저장소 설정(SUPABASE_URL / SUPABASE_SECRET_KEY)이 없어 녹음 업로드가 비활성화됩니다.")
+    }
+
     val profileService = ProfileService(db)
     val songService = SongService(db, videoMetaClient, publicAppUrl)
     val practiceService = PracticeService(db)
+    val storageTrashService = StorageTrashService(db, storageClient)
+    val takeService = TakeService(db, storageClient)
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -170,8 +182,9 @@ fun Application.module(
 
         route("/api/v1") {
             registerMeRoutes(jwtVerifier, profileService)
-            registerSongRoutes(jwtVerifier, profileService, songService)
+            registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
+            registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
 
             route("{...}") {
                 handle {
