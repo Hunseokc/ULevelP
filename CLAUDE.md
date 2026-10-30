@@ -42,7 +42,10 @@
 - 논리적 변경 하나 = 커밋 하나, `feat|fix|test|refactor|docs(scope): 요약`
 - 브랜치 → PR. PR을 다른 PR 브랜치 위에 쌓지 않는다(base는 main)
 - **PR까지만 한다. 머지는 항상 내가 한다** — `gh pr merge`를 시도하지 않는다
-  - PR을 올리면 한 줄로 알린다: `PR #n — <head> → <base> 머지` (base가 main인지 다른 브랜치인지 반드시 적는다)
+  - PR을 올리거나 push한 뒤에는 **CI 종료까지 대기(`gh pr checks --watch`)**한다
+  - CI 결과에 따라:
+    - **성공 시:** `PR #n — <head> → <base> (CI 통과, 머지하세요)`로 알린다 (base가 main인지 다른 브랜치인지 반드시 적는다)
+    - **실패 시:** 원인을 파악해 수정·push하고 CI가 통과할 때까지 해결한 뒤 알린다
   - 내가 "머지했다"고 하면 한 줄로만 받고 다음 일로 넘어간다
 - "main push & pr" 요청이면 **머지만 하면 바로 적용되는 상태**로 올린다: base = main, 최신 origin/main 반영(충돌 없음), CI 통과 확인까지 한 뒤 알린다
 - 금지: push --force, reset --hard, rebase, 다른 사람 커밋 revert

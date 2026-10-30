@@ -33,6 +33,8 @@ fun Application.module(
         monitor.subscribe(ApplicationStopped) {
             runCatching { dataSource.close() }
         }
+    } else {
+        environment.log.warn("DB 설정(DATABASE_URL / REMOTE_DB_HOST)이 없어 데이터베이스 초기화를 건너뜁니다.")
     }
 
     install(ContentNegotiation) {

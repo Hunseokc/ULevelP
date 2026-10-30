@@ -1,7 +1,9 @@
 package ulevelp.db
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.TextColumnType
@@ -130,7 +132,7 @@ object NotesTable : Table("notes") {
     val keywords = array<String>("keywords", TextColumnType()).default(emptyList())
     val difficulty = text("difficulty").nullable()
     val analysis = jsonb<JsonElement>("analysis", Json)
-    val diagramsSvg = jsonb<JsonElement>("diagrams_svg", Json)
+    val diagramsSvg = jsonb<JsonElement>("diagrams_svg", Json).default(JsonArray(emptyList()))
     val model = text("model").default("")
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
@@ -168,7 +170,7 @@ object IntegrationsTable : Table("integrations") {
     val iv = binary("iv", 12)
     val keyVersion = short("key_version").default(1)
     val hint = text("hint")
-    val config = jsonb<JsonElement>("config", Json)
+    val config = jsonb<JsonElement>("config", Json).default(JsonObject(emptyMap()))
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
 
