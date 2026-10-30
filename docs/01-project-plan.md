@@ -47,7 +47,7 @@
 flowchart LR
   subgraph Client["클라이언트 (브라우저 / 아이패드 PWA)"]
     UI["정적 웹 화면 (public/*.html)\n코드 연습실 · 플레이어 · 기록 · 노트"]
-    GIS["Google Identity Services\n(OAuth 로그인 / Drive 토큰)"]
+    GIS["Google Identity Services\n(Drive 토큰, P6)"]
   end
 
   subgraph GCP["Google Cloud Platform"]
@@ -73,6 +73,8 @@ flowchart LR
   UI <-->|"직접 업로드/재생 (P6)"| Drive
   UI <--> YT
   GIS <--> UI
+  UI <-->|"Google 로그인 / 토큰 갱신"| SBA["Supabase Auth\n(Google 공급자)"]
+  CR -.->|"JWKS로 JWT 검증"| SBA
 
   CS -->|"POST /internal/cron/notion-push\n(OIDC 인증)"| CR
   CR <--> PG
@@ -93,6 +95,7 @@ flowchart LR
 | **DB 접근 / 마이그레이션** | **JetBrains Exposed (DAO/DSL) + HikariCP + Flyway** | Kotlin 네이티브 SQL DSL로 타입 안전한 쿼리 작성, `supabase/migrations` 대신 표준 Flyway(`V1__init.sql`)로 스키마 버전 관리 |
 | **데이터베이스** | **PostgreSQL 16** (Supabase Postgres 또는 Cloud SQL) | JSONB(`analysis`, `config`), 배열(`tags`), `ON CONFLICT` Upsert, `FOR UPDATE SKIP LOCKED` 완벽 지원 |
 | **파일 스토리지** | **Supabase Storage** (비공개 버킷 `takes`) | 서버가 서비스 키로 업로드(경로 `{userId}/{takeId}.{ext}`·쿼터는 서버가 강제)하고 60분 유효 서명 URL을 발급해 서버 대역폭 소모 없이 오디오 재생 |
+| **인증** | **Supabase Auth (Google 공급자) + supabase-js** | 토큰 발급·갱신·로그아웃을 Supabase가 처리해 자체 JWT·refresh 구현이 없음. 서버는 JWKS로 검증만 하며, 저장소와 같은 Supabase 프로젝트를 써서 업체가 늘지 않음 |
 | **키 암호화 보관** | **AES-256-GCM (Envelope Encryption) + GCP Secret Manager** | DB 종속적인 `vault.secrets` 대신 표준 AES-256-GCM으로 애플리케이션에서 암·복호화하여 `integrations` 테이블에 보관 |
 | **프런트엔드** | **Vanilla JS (ES6+) + CSS 토큰** | 기존 코드베이스(`public/`) 100% 재사용, 빌드 과정 없는 단순성 유지 |
 
@@ -125,6 +128,7 @@ flowchart LR
 | **KC-D7** | **노션 실시간 동기화 (Outbox 패턴 + lease)** | 곡·세션·녹음·노트 변경 시 같은 DB 트랜잭션 안에서 `sync_outbox` 테이블에 이벤트를 적재한다. Cloud Scheduler의 1분 주기 호출(`POST /internal/cron/notion-push`)이 보장 경로이고, 저장 직후 즉시 트리거(Fast-path)는 응답 후 CPU 제한으로 끝까지 못 갈 수 있는 보조 경로다. 사용자별 동시 실행은 `notion_sync.lease_until`(짧은 트랜잭션으로 획득) 으로 막고, 노션 HTTP 호출은 DB 트랜잭션 밖에서 한다. |
 | **KC-D8** | **다중 앱 키 공유 호환 (`app_id`)** | 동일 사용자의 `guitar-practice` 앱과 키 테이블을 공유할 수 있도록 `integrations` 테이블의 복합 PK를 `(user_id, app_id, provider)`로 유지한다. |
 | **KC-D9** | **BYOK & 로컬 저장소 보안 (X1 적용 완료)** | 노션 실시간 연동과 Gemini 학습 노트는 각 키를 등록한 사용자 전용이다(`ulp:keys`에 끝 4자리·갱신 시각만 캐시). 모든 새 localStorage 키는 `ulp:` 접두어를 쓰고, XSS 정적 검사(`test/security.test.js`)와 CSP meta를 모든 HTML에 적용한다. |
+| **KC-D10** | **로그인은 Supabase Auth** | Google 로그인을 Supabase Auth가 맡고 Ktor는 JWKS로 access token을 검증만 한다. Google ID 토큰을 직접 쓰면 1시간 만료 + 브라우저 refresh 부재로 자체 JWT·refresh 토큰 테이블·무효화를 만들어야 하고, Pages↔Cloud Run 교차 Origin이라 쿠키 세션도 iPad Safari에서 막힌다. 저장소가 이미 Supabase라 업체도 늘지 않는다(2026-10-30 결정). |
 
 ---
 
@@ -134,7 +138,7 @@ flowchart LR
 
 | 단계 | 주요 작업 내용 | 관련 요구사항 | 예상 소요 | 완료 기준 (Milestone) |
 | --- | --- | --- | --- | --- |
-| **P0. 기반 구축 · 인증 · DB** | • Ktor 프로젝트,マルチ스테이지 Dockerfile, Cloud Run CI/CD 구성<br>• Flyway `V1__init.sql` 작성 및 PostgreSQL 연동<br>• Google OAuth2 로그인 및 JWT 발급/검증 미들웨어<br>• 권한 격리 및 보안 헤더(CSP) 통합 테스트 | `FR-AUTH`<br>`NFR-SEC` | **3 ~ 4일** | 구글 로그인/로그아웃, JWT 인증, 타 사용자 데이터 접근 차단 테스트 통과 |
+| **P0. 기반 구축 · 인증 · DB** | • Ktor 프로젝트,マルチ스테이지 Dockerfile, Cloud Run CI/CD 구성<br>• Flyway `V1__init.sql` 작성 및 PostgreSQL 연동<br>• Supabase Auth Google 로그인 + Ktor JWT(JWKS) 검증 미들웨어<br>• 권한 격리 및 보안 헤더(CSP) 통합 테스트 | `FR-AUTH`<br>`NFR-SEC` | **3 ~ 4일** | 구글 로그인/로그아웃, JWT 인증, 타 사용자 데이터 접근 차단 테스트 통과 |
 | **P1. 플레이어 저장 · 녹음** | • 곡(`songs`), 연습 기록(`sessions`), 녹음(`takes`) API 구현<br>• 1분 미만 연습 시간 보류(`keep`) 및 원자적 시간 합산 로직<br>• Supabase Storage 업로드·서명 URL 발급·200MB 쿼터 제한<br>• 비로그인 로컬 기록(`ulp:v:*`, `pp:v:*`) 계정 마이그레이션 API | `FR-SONG`<br>`FR-SESSION`<br>`FR-TAKE`<br>`FR-LOCAL` | **3 ~ 4일** | 노션 설정 없이 구글 로그인만으로 플레이어 자동 저장 및 녹음 업로드/재생 동작 |
 | **P2. 인앱 기록 · 보관함 화면** | • 12주 연습 시간 달력 집계 및 주간/월간 통계 API<br>• 곡 상세 타임라인 및 두 녹음 A/B 비교 재생 UI(`log.html`)<br>• 첫 화면(`index.html`) 및 플레이어 곡 목록 서랍을 신규 API로 연결 | `FR-LOG`<br>`FR-LIB` | **2.5 ~ 3일** | 노션을 열지 않고도 앱 내에서 연습 달력, 곡별 기록, 녹음 비교 청취 가능 |
 | **P3. 노션 템플릿 · ZIP 입출력** | • 공식 노션 템플릿 페이지 공개 및 안내 연결<br>• 서비스 → 노션 호환 ZIP(UTF-8 BOM CSV + 오디오 파일) 내보내기<br>• 노션 Markdown & CSV ZIP 업로드 → 미리보기(Dry-run) → 확정 Upsert API | `FR-NX` | **2.5 ~ 3일** | 노션 템플릿 복제 후 CSV 병합 성공, 노션 백업 ZIP 가져오기 왕복 테스트 통과 |

@@ -33,7 +33,6 @@ erDiagram
     users {
         uuid id PK
         text email
-        text google_sub UK
         timestamptz created_at
     }
     profiles {
@@ -122,9 +121,8 @@ END $$;
 -- 1. users & profiles (사용자 계정 및 프로필)
 -- ============================================================
 CREATE TABLE users (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email        TEXT NOT NULL,         -- 구글 계정 이메일은 바뀔 수 있어 UNIQUE를 걸지 않는다. 신원은 google_sub
-  google_sub   TEXT NOT NULL UNIQUE,
+  id           UUID PRIMARY KEY,      -- Supabase Auth 사용자 id (JWT sub). 서버가 만들지 않는다
+  email        TEXT NOT NULL,         -- 구글 계정 이메일은 바뀔 수 있어 UNIQUE를 걸지 않는다. 신원은 id
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
