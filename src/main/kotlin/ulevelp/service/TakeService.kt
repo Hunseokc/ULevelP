@@ -373,6 +373,7 @@ class TakeService(
     }
 
     companion object {
+        const val MAX_METADATA_BYTES = 65_536L             // 64KB
         const val MAX_FILE_BYTES = 52_428_800L            // 50MB
         const val MAX_REQUEST_BYTES = 53_477_376L         // 51MB (Content-Length 사전 거부·formFieldLimit)
         const val SIGNED_URL_TTL_SEC = 3600
