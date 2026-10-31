@@ -57,6 +57,37 @@ window.ULData = (function () {
     return r ? r.song : null;
   }
 
+  async function getSong(songId) {
+    requireLogin();
+    const path = '/api/v1/songs/' + encodeURIComponent(songId);
+    return await window.ULAuth.apiFetch(path);
+  }
+
+  async function updateSong(songId, patch) {
+    requireLogin();
+    const body = {};
+    if (patch && typeof patch === 'object') {
+      if (patch.status !== undefined) body.status = patch.status;
+      if (patch.memo !== undefined) body.memo = patch.memo;
+      if (patch.title !== undefined) body.title = patch.title;
+    }
+    const path = '/api/v1/songs/' + encodeURIComponent(songId);
+    const r = await window.ULAuth.apiFetch(path, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return r ? r.song : null;
+  }
+
+  async function removeSong(songId) {
+    requireLogin();
+    const path = '/api/v1/songs/' + encodeURIComponent(songId);
+    await window.ULAuth.apiFetch(path, {
+      method: 'DELETE',
+    });
+    return { ok: true };
+  }
+
   function saveProgress(body, opts) {
     try {
       requireLogin();
@@ -270,6 +301,9 @@ window.ULData = (function () {
       list,
       byVideo,
       create,
+      get: getSong,
+      update: updateSong,
+      remove: removeSong,
     },
     sessions: {
       list: listSessions,

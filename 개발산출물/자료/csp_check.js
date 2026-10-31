@@ -13,6 +13,8 @@ const BASE = (process.argv[2] || 'http://localhost:3000/').replace(/\/?$/, '/');
 const CHROME = process.env.CHROME || [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  path.join(os.homedir(), 'Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell'),
   '/usr/bin/google-chrome', '/usr/bin/chromium',
 ].find((p) => fs.existsSync(p));
 const PORT = 9333;
@@ -33,8 +35,8 @@ const PAGES = [
     expect: `({ thumb: document.getElementById('goThumb').src, play: document.getElementById('goPlay').getAttribute('href') })`,
   },
   {
-    name: '첫 화면 + Apps Script 연결(connect-src)', url: 'index.html',
-    before: { 'pp-api': '"https://script.google.com/macros/s/AKfy-csp-check/exec"', 'pp-key': '"x"' },
+    name: '첫 화면 비로그인 곡 안내', url: 'index.html',
+    before: {},
     expect: `({ songs: document.getElementById('songs').textContent })`,
   },
   { name: '코드 연습실 전체 탭', url: 'chords.html', act: `(() => { ['tone','matrix','circle','reint','tf','scale'].forEach((t) => document.getElementById('tab-' + t).click()); document.getElementById('a-go').click(); document.getElementById('cc-all').open = true; })()`,
@@ -46,6 +48,10 @@ const PAGES = [
     expect: `({ preview: document.querySelector('#preview img').src, runs: document.getElementById('runs').textContent.slice(0, 60) })` },
   { name: '기록 화면 비로그인 (log.html)', url: 'log.html',
     expect: `({ guestVisible: !document.getElementById('logGuest').hidden, title: document.querySelector('.page-title').textContent })` },
+  { name: '곡 상세 화면 비로그인 (log.html?song=...)', url: 'log.html?song=00000000-0000-0000-0000-000000000001',
+    expect: `({ guestVisible: !document.getElementById('logGuest').hidden, detailHidden: document.getElementById('pane-song-detail').hidden })` },
+  { name: '개인정보처리방침 (privacy.html)', url: 'privacy.html',
+    expect: `({ title: document.querySelector('.page-title').textContent, h1: document.getElementById('privH1').textContent })` },
   { name: '설정 + 테마 버튼', url: 'settings.html', act: `document.querySelector('[data-theme="light"]').click()`,
     expect: `({ theme: document.documentElement.dataset.theme, saved: localStorage.getItem('ulp:theme'), old: localStorage.getItem('gv-theme') })` },
   // 대조군: 검출기가 살아 있는지. 허용 안 된 주소로 fetch, style 속성 삽입 → 위반이 잡혀야 OK

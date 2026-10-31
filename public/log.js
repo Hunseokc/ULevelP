@@ -1,13 +1,21 @@
-// public/log.js — 최근 12주 연습 달력, 주간/월간 요약, 날짜별 세션·녹음 재생·메모 저장
+// public/log.js — 최근 12주 연습 달력, 주간/월간 요약, 날짜별 세션·녹음 재생·메모 저장 + 곡 탭·곡 상세·A/B 비교 듣기
 (function () {
   'use strict';
 
   const safeUrl = (window.UL && window.UL.safeUrl) || function (u) { return String(u || ''); };
+  const esc = (window.UL && window.UL.esc) || function (s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
 
   let currentUid = null;
   let sessionsData = null; // { summary, calendar, sessions }
   let selectedDate = null;
   let activeTab = 'log'; // 'log' | 'songs'
+  let currentSongFilter = ''; // '' | 'practicing' | 'paused' | 'done'
+  let songsCache = null;
+  let currentDetailSong = null; // { song, sessions, takes }
+  let abSelected = []; // [takeId1, takeId2]
+  let detailTakesMap = new Map();
 
   function todayStr() {
     const d = new Date();
@@ -74,6 +82,7 @@
     const paneSongs = document.getElementById('pane-songs');
     const paneDetail = document.getElementById('pane-song-detail');
     const tabs = document.getElementById('logTabs');
+    const header = document.getElementById('logHeader');
 
     if (guestEl) guestEl.hidden = !isGuest;
     if (isGuest) {
@@ -81,27 +90,27 @@
       if (paneSongs) paneSongs.hidden = true;
       if (paneDetail) paneDetail.hidden = true;
       if (tabs) tabs.hidden = true;
+      if (header) header.hidden = false;
     } else {
-      if (tabs) tabs.hidden = false;
-      if (activeTab === 'log') {
-        if (paneLog) paneLog.hidden = false;
-        if (paneSongs) paneSongs.hidden = true;
-      } else {
-        if (paneLog) paneLog.hidden = true;
-        if (paneSongs) paneSongs.hidden = false;
-      }
+      routeView();
     }
   }
 
   function resetState() {
     sessionsData = null;
     selectedDate = null;
+    songsCache = null;
+    currentDetailSong = null;
+    abSelected = [];
+    detailTakesMap.clear();
+
     document.querySelectorAll('audio').forEach(function (a) {
       try {
         a.pause();
         a.src = '';
       } catch (_) {}
     });
+
     const sumWeek = document.getElementById('sumWeek');
     if (sumWeek) sumWeek.textContent = '0분';
     const sumMonth = document.getElementById('sumMonth');
@@ -114,8 +123,13 @@
     if (daySessions) daySessions.replaceChildren();
     const dayTitle = document.getElementById('dayTitle');
     if (dayTitle) dayTitle.textContent = '연습 기록';
+    const songList = document.getElementById('songList');
+    if (songList) songList.replaceChildren();
+    const abPanel = document.getElementById('abPanel');
+    if (abPanel) abPanel.hidden = true;
   }
 
+  // -------------------- 탭 1: 연습 기록 (Log) --------------------
   function renderSummary() {
     const sumWeek = document.getElementById('sumWeek');
     const sumMonth = document.getElementById('sumMonth');
@@ -216,7 +230,7 @@
 
       card.appendChild(head);
 
-      // 2. 메타: minutes분 (seconds초) · 반복 loops회 [· 구간 segment] [· rate×]
+      // 2. 메타
       const metaDiv = document.createElement('div');
       metaDiv.className = 'meta';
       let metaText = s.minutes + '분 (' + s.seconds + '초) · 반복 ' + s.loops + '회';
@@ -386,7 +400,6 @@
       sessionsData = data || { summary: { thisWeekSeconds: 0, thisMonthSeconds: 0 }, calendar: [], sessions: [] };
       setMsg('');
 
-      // 기본 선택 날짜 결정: 아직 없거나 세션에 맞춤
       if (!selectedDate) {
         if (Array.isArray(sessionsData.sessions) && sessionsData.sessions.length > 0) {
           selectedDate = sessionsData.sessions[0].date;
@@ -404,28 +417,641 @@
     }
   }
 
+  // -------------------- 탭 2: 곡 보관함 (Songs) --------------------
+  async function loadSongsTab() {
+    setMsg('곡 목록을 불러오는 중...');
+    const reqUid = currentUid;
+    try {
+      const list = await window.ULData.songs.list(currentSongFilter);
+      if (reqUid !== currentUid) return;
+      songsCache = list || [];
+      setMsg('');
+      renderSongList();
+    } catch (e) {
+      if (reqUid !== currentUid) return;
+      setMsg((e && e.message) || '곡 목록을 불러오지 못했어요', 'err');
+    }
+  }
+
+  function renderSongList() {
+    const listEl = document.getElementById('songList');
+    if (!listEl) return;
+    listEl.replaceChildren();
+
+    const songs = songsCache || [];
+    if (songs.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = '등록된 연습 곡이 없어요.';
+      listEl.appendChild(p);
+      return;
+    }
+
+    songs.forEach(function (s) {
+      const card = document.createElement('div');
+      card.className = 'card song-card';
+
+      // 1. 헤더: 제목 링크 + 이어서 연습 바로가기
+      const head = document.createElement('div');
+      head.className = 'song-card-head';
+
+      const titleLink = document.createElement('a');
+      titleLink.className = 'song-detail-link';
+      titleLink.href = 'log.html?song=' + encodeURIComponent(s.id);
+      const bTitle = document.createElement('b');
+      bTitle.textContent = s.title;
+      titleLink.appendChild(bTitle);
+
+      if (s.artist) {
+        const spanArtist = document.createElement('span');
+        spanArtist.className = 'meta';
+        spanArtist.textContent = ' · ' + s.artist;
+        titleLink.appendChild(spanArtist);
+      }
+      head.appendChild(titleLink);
+
+      const resumeLink = document.createElement('a');
+      resumeLink.className = 'ghost mini';
+      resumeLink.href = s.resumeUrl ? safeUrl(s.resumeUrl) : ('practice.html?v=' + encodeURIComponent(s.videoId));
+      resumeLink.textContent = '▶ 이어서 연습';
+      head.appendChild(resumeLink);
+
+      card.appendChild(head);
+
+      // 2. 요약 줄: 누적 시간 + 최근 연습일
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'meta';
+      metaDiv.textContent = '누적 ' + fmtDuration(s.totalSeconds) + (s.lastDate ? ' · 최근 연습 ' + s.lastDate : ' · 연습 기록 없음');
+      card.appendChild(metaDiv);
+
+      // 3. 편집 줄: 상태 select + 메모 input + 메모 저장 + 곡 삭제
+      const editRow = document.createElement('div');
+      editRow.className = 'song-card-edit';
+
+      const sel = document.createElement('select');
+      sel.setAttribute('aria-label', '곡 상태');
+      const optPracticing = new Option('연습 중', 'practicing');
+      const optPaused = new Option('보류', 'paused');
+      const optDone = new Option('완료', 'done');
+      sel.add(optPracticing);
+      sel.add(optPaused);
+      sel.add(optDone);
+      sel.value = s.statusCode || 'practicing';
+
+      sel.addEventListener('change', function () {
+        sel.disabled = true;
+        window.ULData.songs.update(s.id, { status: sel.value })
+          .then(function (updated) {
+            if (updated) {
+              s.statusCode = updated.statusCode;
+              s.status = updated.status;
+            }
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '상태 변경에 실패했어요');
+            sel.value = s.statusCode || 'practicing';
+          })
+          .finally(function () {
+            sel.disabled = false;
+          });
+      });
+      editRow.appendChild(sel);
+
+      const memoInput = document.createElement('input');
+      memoInput.type = 'text';
+      memoInput.className = 'inp';
+      memoInput.maxLength = 2000;
+      memoInput.placeholder = '곡 메모';
+      memoInput.value = s.memo || '';
+      editRow.appendChild(memoInput);
+
+      const saveMemoBtn = document.createElement('button');
+      saveMemoBtn.type = 'button';
+      saveMemoBtn.className = 'ghost mini';
+      saveMemoBtn.textContent = '메모 저장';
+      saveMemoBtn.addEventListener('click', function () {
+        saveMemoBtn.disabled = true;
+        window.ULData.songs.update(s.id, { memo: memoInput.value })
+          .then(function (updated) {
+            if (updated) s.memo = updated.memo;
+            saveMemoBtn.textContent = '저장됨';
+            setTimeout(function () {
+              saveMemoBtn.textContent = '메모 저장';
+            }, 1500);
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '메모 저장에 실패했어요');
+          })
+          .finally(function () {
+            saveMemoBtn.disabled = false;
+          });
+      });
+      editRow.appendChild(saveMemoBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'ghost mini';
+      delBtn.textContent = '곡 삭제';
+      delBtn.addEventListener('click', function () {
+        if (!window.confirm('이 곡과 모든 연습 기록·녹음 파일을 함께 삭제할까요?')) return;
+        delBtn.disabled = true;
+        window.ULData.songs.remove(s.id)
+          .then(function () {
+            card.remove();
+            songsCache = (songsCache || []).filter(function (it) { return it.id !== s.id; });
+            if (songsCache.length === 0) {
+              renderSongList();
+            }
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '곡 삭제에 실패했어요');
+            delBtn.disabled = false;
+          });
+      });
+      editRow.appendChild(delBtn);
+
+      card.appendChild(editRow);
+      listEl.appendChild(card);
+    });
+  }
+
+  // -------------------- 탭 3: 곡 상세 (Song Detail) --------------------
+  async function loadSongDetail(songId) {
+    setMsg('곡 상세 정보를 불러오는 중...');
+    const reqUid = currentUid;
+    try {
+      const data = await window.ULData.songs.get(songId);
+      if (reqUid !== currentUid) return;
+      currentDetailSong = data;
+      setMsg('');
+      renderSongDetail();
+    } catch (e) {
+      if (reqUid !== currentUid) return;
+      setMsg((e && e.message) || '곡 상세 정보를 불러오지 못했어요', 'err');
+    }
+  }
+
+  function renderSongDetail() {
+    if (!currentDetailSong || !currentDetailSong.song) return;
+    const song = currentDetailSong.song;
+    const sessions = currentDetailSong.sessions || [];
+    const takes = currentDetailSong.takes || [];
+
+    // 1. 상단 정보
+    const detailTitle = document.getElementById('detailTitle');
+    const detailArtist = document.getElementById('detailArtist');
+    const detailMeta = document.getElementById('detailMeta');
+    const detailResume = document.getElementById('detailResume');
+    const detailStatus = document.getElementById('detailStatus');
+    const detailMemo = document.getElementById('detailMemo');
+    const btnSaveSongMemo = document.getElementById('btnSaveSongMemo');
+    const btnDeleteSong = document.getElementById('btnDeleteSong');
+    const btnBackSongs = document.getElementById('btnBackSongs');
+
+    if (detailTitle) detailTitle.textContent = song.title;
+    if (detailArtist) detailArtist.textContent = song.artist ? ' · ' + song.artist : '';
+    if (detailMeta) {
+      detailMeta.textContent = '누적 ' + fmtDuration(song.totalSeconds) + (song.lastDate ? ' · 최근 연습 ' + song.lastDate : ' · 연습 기록 없음');
+    }
+    if (detailResume) {
+      detailResume.href = song.resumeUrl ? safeUrl(song.resumeUrl) : ('practice.html?v=' + encodeURIComponent(song.videoId));
+    }
+    if (detailStatus) detailStatus.value = song.statusCode || 'practicing';
+    if (detailMemo) detailMemo.value = song.memo || '';
+
+    if (detailStatus) {
+      detailStatus.onchange = function () {
+        detailStatus.disabled = true;
+        window.ULData.songs.update(song.id, { status: detailStatus.value })
+          .then(function (updated) {
+            if (updated) {
+              song.statusCode = updated.statusCode;
+              song.status = updated.status;
+            }
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '상태 변경에 실패했어요');
+            detailStatus.value = song.statusCode || 'practicing';
+          })
+          .finally(function () {
+            detailStatus.disabled = false;
+          });
+      };
+    }
+
+    if (btnSaveSongMemo && detailMemo) {
+      btnSaveSongMemo.onclick = function () {
+        btnSaveSongMemo.disabled = true;
+        window.ULData.songs.update(song.id, { memo: detailMemo.value })
+          .then(function (updated) {
+            if (updated) song.memo = updated.memo;
+            btnSaveSongMemo.textContent = '저장됨';
+            setTimeout(function () {
+              btnSaveSongMemo.textContent = '저장';
+            }, 1500);
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '메모 저장에 실패했어요');
+          })
+          .finally(function () {
+            btnSaveSongMemo.disabled = false;
+          });
+      };
+    }
+
+    if (btnDeleteSong) {
+      btnDeleteSong.onclick = function () {
+        if (!window.confirm('이 곡과 모든 연습 기록·녹음 파일을 함께 삭제할까요?')) return;
+        btnDeleteSong.disabled = true;
+        window.ULData.songs.remove(song.id)
+          .then(function () {
+            history.pushState(null, '', 'log.html#songs');
+            routeView();
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '곡 삭제에 실패했어요');
+            btnDeleteSong.disabled = false;
+          });
+      };
+    }
+
+    if (btnBackSongs) {
+      btnBackSongs.onclick = function () {
+        history.pushState(null, '', 'log.html#songs');
+        routeView();
+      };
+    }
+
+    // 2. 날짜별 연습 시간 막대 타임라인 (FR-LIB-2)
+    const tlContainer = document.getElementById('detailTimeline');
+    if (tlContainer) {
+      tlContainer.replaceChildren();
+      if (sessions.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'empty';
+        p.textContent = '아직 연습 세션 기록이 없어요.';
+        tlContainer.appendChild(p);
+      } else {
+        const maxSec = Math.max(60, ...sessions.map(function (s) { return s.seconds || 0; }));
+        sessions.forEach(function (s) {
+          const row = document.createElement('div');
+          row.className = 'tl-row';
+
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'tl-meta';
+
+          const leftSpan = document.createElement('span');
+          let leftText = s.date;
+          if (s.segment) leftText += ' · 구간 ' + s.segment;
+          if (s.rate != null) leftText += ' · ' + s.rate + '×';
+          leftSpan.textContent = leftText;
+          metaDiv.appendChild(leftSpan);
+
+          const rightSpan = document.createElement('span');
+          rightSpan.className = 'meta';
+          rightSpan.textContent = s.minutes + '분 (' + (s.loops || 0) + '회)';
+          metaDiv.appendChild(rightSpan);
+
+          row.appendChild(metaDiv);
+
+          // CSP 준수를 위해 <progress> 요소 사용
+          const bar = document.createElement('progress');
+          bar.className = 'tl-bar';
+          bar.max = maxSec;
+          bar.value = s.seconds || 0;
+          row.appendChild(bar);
+
+          if (s.memo) {
+            const memoDiv = document.createElement('div');
+            memoDiv.className = 'tl-memo';
+            memoDiv.textContent = s.memo;
+            row.appendChild(memoDiv);
+          }
+
+          tlContainer.appendChild(row);
+        });
+      }
+    }
+
+    // 3. 전체 녹음 목록 & A/B 비교 듣기 (FR-LIB-3)
+    renderDetailTakes(takes);
+  }
+
+  function renderDetailTakes(takes) {
+    const takesContainer = document.getElementById('detailTakes');
+    if (!takesContainer) return;
+    takesContainer.replaceChildren();
+
+    abSelected = [];
+    detailTakesMap.clear();
+    updateAbPanel();
+
+    if (takes.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = '아직 녹음된 테이크가 없어요.';
+      takesContainer.appendChild(p);
+      return;
+    }
+
+    takes.forEach(function (t) {
+      detailTakesMap.set(t.id, t);
+      const row = document.createElement('div');
+      row.className = 'take-row';
+
+      // A/B 체크박스
+      const chkLabel = document.createElement('label');
+      chkLabel.className = 'check';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.className = 'ab-check';
+      chk.setAttribute('data-take-id', t.id);
+
+      chk.addEventListener('change', function () {
+        if (chk.checked) {
+          if (abSelected.length >= 2) {
+            // 이미 2개 선택된 상태면 가장 먼저 선택한 것을 체크 해제
+            const oldestId = abSelected.shift();
+            const allChecks = takesContainer.querySelectorAll('.ab-check');
+            for (let i = 0; i < allChecks.length; i++) {
+              if (allChecks[i].getAttribute('data-take-id') === oldestId) {
+                allChecks[i].checked = false;
+                break;
+              }
+            }
+          }
+          abSelected.push(t.id);
+        } else {
+          abSelected = abSelected.filter(function (id) { return id !== t.id; });
+        }
+        updateAbPanel();
+      });
+
+      const spanText = document.createElement('span');
+      spanText.textContent = '비교 선택';
+      chkLabel.appendChild(chk);
+      chkLabel.appendChild(spanText);
+      row.appendChild(chkLabel);
+
+      const label = document.createElement('span');
+      label.className = 'take-meta';
+      label.textContent = '🎙 ' + fmtTakeMeta(t);
+      row.appendChild(label);
+
+      const playBtn = document.createElement('button');
+      playBtn.type = 'button';
+      playBtn.className = 'ghost mini';
+      playBtn.textContent = '▶ 듣기';
+      row.appendChild(playBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'ghost mini';
+      delBtn.textContent = '삭제';
+      row.appendChild(delBtn);
+
+      const msgSpan = document.createElement('span');
+      msgSpan.className = 'meta';
+      row.appendChild(msgSpan);
+
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.hidden = true;
+      row.appendChild(audio);
+
+      playBtn.addEventListener('click', function () {
+        if (t.storage === 'drive') {
+          msgSpan.textContent = 'Google Drive 녹음은 드라이브 연동 단계(K6-1)에서 재생을 지원해요.';
+          return;
+        }
+        if (t.storage === 'supabase') {
+          if (!audio.src) {
+            playBtn.disabled = true;
+            msgSpan.textContent = '주소 요청 중...';
+            window.ULData.takes.getUrl(t.id)
+              .then(function (r) {
+                if (r && r.url) {
+                  audio.src = safeUrl(r.url);
+                  audio.hidden = false;
+                  msgSpan.textContent = '';
+                  audio.play().catch(function () {});
+                } else {
+                  msgSpan.textContent = '주소 발급 실패';
+                }
+              })
+              .catch(function (err) {
+                msgSpan.textContent = (err && err.message) || '재생 실패';
+              })
+              .finally(function () {
+                playBtn.disabled = false;
+              });
+          } else {
+            audio.hidden = false;
+            audio.play().catch(function () {});
+          }
+        }
+      });
+
+      delBtn.addEventListener('click', function () {
+        if (!window.confirm('이 녹음을 삭제할까요?')) return;
+        delBtn.disabled = true;
+        window.ULData.takes.remove(t.id)
+          .then(function () {
+            abSelected = abSelected.filter(function (id) { return id !== t.id; });
+            detailTakesMap.delete(t.id);
+            if (currentDetailSong && Array.isArray(currentDetailSong.takes)) {
+              currentDetailSong.takes = currentDetailSong.takes.filter(function (it) { return it.id !== t.id; });
+            }
+            row.remove();
+            updateAbPanel();
+            if (currentDetailSong && (!currentDetailSong.takes || currentDetailSong.takes.length === 0)) {
+              renderDetailTakes([]);
+            }
+          })
+          .catch(function (err) {
+            alert((err && err.message) || '녹음 삭제에 실패했어요');
+            delBtn.disabled = false;
+          });
+      });
+
+      takesContainer.appendChild(row);
+    });
+  }
+
+  // -------------------- A/B 교차 비교 듣기 패널 (FR-LIB-3) --------------------
+  function updateAbPanel() {
+    const abPanel = document.getElementById('abPanel');
+    const audioA = document.getElementById('abAudioA');
+    const audioB = document.getElementById('abAudioB');
+    const labelA = document.getElementById('abLabelA');
+    const labelB = document.getElementById('abLabelB');
+    const playA = document.getElementById('abPlayA');
+    const playB = document.getElementById('abPlayB');
+
+    if (!abPanel) return;
+
+    if (abSelected.length !== 2) {
+      abPanel.hidden = true;
+      if (audioA) { audioA.pause(); audioA.src = ''; }
+      if (audioB) { audioB.pause(); audioB.src = ''; }
+      return;
+    }
+
+    abPanel.hidden = false;
+
+    const t1 = detailTakesMap.get(abSelected[0]);
+    const t2 = detailTakesMap.get(abSelected[1]);
+    if (!t1 || !t2) return;
+
+    // recordedAt 오름차순: 먼저 녹음한 것 -> A (과거), 나중 녹음 -> B (최근)
+    let takeA = t1;
+    let takeB = t2;
+    if (t1.recordedAt > t2.recordedAt) {
+      takeA = t2;
+      takeB = t1;
+    }
+
+    const descA = takeA.recordedAt ? takeA.recordedAt.slice(0, 16).replace('T', ' ') : '';
+    const descB = takeB.recordedAt ? takeB.recordedAt.slice(0, 16).replace('T', ' ') : '';
+
+    if (labelA) labelA.textContent = 'A (과거 녹음) · ' + descA + ' · ' + (takeA.durationSec || 0) + '초';
+    if (labelB) labelB.textContent = 'B (최근 녹음) · ' + descB + ' · ' + (takeB.durationSec || 0) + '초';
+
+    // 상호 배타 재생 이벤트 연결
+    if (audioA && audioB) {
+      audioA.onplay = function () {
+        audioB.pause();
+      };
+      audioB.onplay = function () {
+        audioA.pause();
+      };
+    }
+
+    // 재생 버튼 연결
+    async function playSlot(take, audio, btn) {
+      if (!audio) return;
+      if (!audio.src) {
+        btn.disabled = true;
+        try {
+          const r = await window.ULData.takes.getUrl(take.id);
+          if (r && r.url) {
+            audio.src = safeUrl(r.url);
+            await audio.play();
+          }
+        } catch (err) {
+          alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
+        } finally {
+          btn.disabled = false;
+        }
+      } else {
+        if (audio.paused) {
+          await audio.play().catch(function () {});
+        } else {
+          audio.pause();
+        }
+      }
+    }
+
+    if (playA && audioA) {
+      playA.onclick = function () {
+        playSlot(takeA, audioA, playA);
+      };
+    }
+    if (playB && audioB) {
+      playB.onclick = function () {
+        playSlot(takeB, audioB, playB);
+      };
+    }
+  }
+
+  // -------------------- 라우팅 & 탭 초기화 --------------------
+  function routeView() {
+    const paneLog = document.getElementById('pane-log');
+    const paneSongs = document.getElementById('pane-songs');
+    const paneDetail = document.getElementById('pane-song-detail');
+    const tabs = document.getElementById('logTabs');
+    const tabLog = document.getElementById('tab-log');
+    const tabSongs = document.getElementById('tab-songs');
+    const header = document.getElementById('logHeader');
+
+    const params = new URLSearchParams(window.location.search);
+    const songId = params.get('song');
+
+    if (songId) {
+      // 1. 곡 상세 화면
+      if (tabs) tabs.hidden = true;
+      if (paneLog) paneLog.hidden = true;
+      if (paneSongs) paneSongs.hidden = true;
+      if (paneDetail) paneDetail.hidden = false;
+      if (header) header.hidden = true;
+      loadSongDetail(songId);
+    } else {
+      // 2. 탭 화면
+      if (header) header.hidden = false;
+      if (tabs) tabs.hidden = false;
+      if (paneDetail) paneDetail.hidden = true;
+
+      const hash = window.location.hash;
+      if (hash === '#songs' || activeTab === 'songs') {
+        activeTab = 'songs';
+        if (tabSongs) tabSongs.setAttribute('aria-selected', 'true');
+        if (tabLog) tabLog.setAttribute('aria-selected', 'false');
+        if (paneLog) paneLog.hidden = true;
+        if (paneSongs) paneSongs.hidden = false;
+        loadSongsTab();
+      } else {
+        activeTab = 'log';
+        if (tabLog) tabLog.setAttribute('aria-selected', 'true');
+        if (tabSongs) tabSongs.setAttribute('aria-selected', 'false');
+        if (paneLog) paneLog.hidden = false;
+        if (paneSongs) paneSongs.hidden = true;
+        loadLog();
+      }
+    }
+  }
+
   function initTabs() {
     const tabLog = document.getElementById('tab-log');
     const tabSongs = document.getElementById('tab-songs');
-    const paneLog = document.getElementById('pane-log');
-    const paneSongs = document.getElementById('pane-songs');
 
-    if (!tabLog || !tabSongs) return;
+    if (tabLog) {
+      tabLog.addEventListener('click', function () {
+        if (activeTab !== 'log' || window.location.hash === '#songs') {
+          activeTab = 'log';
+          history.pushState(null, '', 'log.html');
+          routeView();
+        }
+      });
+    }
 
-    tabLog.addEventListener('click', function () {
-      activeTab = 'log';
-      tabLog.setAttribute('aria-selected', 'true');
-      tabSongs.setAttribute('aria-selected', 'false');
-      if (paneLog) paneLog.hidden = false;
-      if (paneSongs) paneSongs.hidden = true;
-    });
+    if (tabSongs) {
+      tabSongs.addEventListener('click', function () {
+        if (activeTab !== 'songs' || window.location.hash !== '#songs') {
+          activeTab = 'songs';
+          history.pushState(null, '', 'log.html#songs');
+          routeView();
+        }
+      });
+    }
 
-    tabSongs.addEventListener('click', function () {
-      activeTab = 'songs';
-      tabSongs.setAttribute('aria-selected', 'true');
-      tabLog.setAttribute('aria-selected', 'false');
-      if (paneLog) paneLog.hidden = true;
-      if (paneSongs) paneSongs.hidden = false;
+    // 상태 필터 버튼
+    const filters = document.getElementById('songFilters');
+    if (filters) {
+      filters.addEventListener('click', function (e) {
+        const btn = e.target.closest('button[data-status]');
+        if (!btn) return;
+        const status = btn.getAttribute('data-status') || '';
+        currentSongFilter = status;
+        filters.querySelectorAll('button[data-status]').forEach(function (b) {
+          b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+        });
+        loadSongsTab();
+      });
+    }
+
+    window.addEventListener('popstate', function () {
+      routeView();
     });
   }
 
@@ -443,7 +1069,6 @@
       showGuest(true);
     } else {
       showGuest(false);
-      loadLog();
     }
 
     if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
@@ -456,7 +1081,6 @@
             showGuest(true);
           } else {
             showGuest(false);
-            loadLog();
           }
         }
       });

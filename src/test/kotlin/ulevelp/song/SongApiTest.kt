@@ -824,4 +824,186 @@ class SongApiTest {
         assertEquals(HttpStatusCode.Unauthorized, postRes.status)
         assertStandardError(postRes.bodyAsText(), 401, "UNAUTHORIZED")
     }
+
+    @Test
+    fun `S13 곡 상세 조회(세션·녹음 정렬 및 필드)`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val postRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"dQw4w9WgXcQ","title":"Song X","artist":"Artist X"}""")
+        }
+        assertEquals(HttpStatusCode.Created, postRes.status)
+        val songId = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+        val songUuid = UUID.fromString(songId)
+
+        val session1Id = UUID.randomUUID()
+        val session2Id = UUID.randomUUID()
+
+        transaction(db) {
+            SessionsTable.insert {
+                it[SessionsTable.id] = session1Id
+                it[SessionsTable.userId] = userA
+                it[SessionsTable.songId] = songUuid
+                it[SessionsTable.date] = LocalDate.of(2026, 10, 28)
+                it[SessionsTable.seconds] = 600
+                it[SessionsTable.loops] = 10
+                it[SessionsTable.a] = BigDecimal("10.0")
+                it[SessionsTable.b] = BigDecimal("25.0")
+                it[SessionsTable.rate] = BigDecimal("1.00")
+                it[SessionsTable.memo] = ""
+            }
+            SessionsTable.insert {
+                it[SessionsTable.id] = session2Id
+                it[SessionsTable.userId] = userA
+                it[SessionsTable.songId] = songUuid
+                it[SessionsTable.date] = LocalDate.of(2026, 10, 30)
+                it[SessionsTable.seconds] = 960
+                it[SessionsTable.loops] = 24
+                it[SessionsTable.a] = BigDecimal("38.0")
+                it[SessionsTable.b] = BigDecimal("55.2")
+                it[SessionsTable.rate] = BigDecimal("0.75")
+                it[SessionsTable.memo] = "좋음"
+            }
+            TakesTable.insert {
+                it[TakesTable.id] = UUID.randomUUID()
+                it[TakesTable.userId] = userA
+                it[TakesTable.songId] = songUuid
+                it[TakesTable.sessionId] = session1Id
+                it[TakesTable.recordedAt] = OffsetDateTime.parse("2026-10-28T10:00:00Z")
+                it[TakesTable.a] = BigDecimal("10.0")
+                it[TakesTable.b] = BigDecimal("25.0")
+                it[TakesTable.rate] = BigDecimal("1.00")
+                it[TakesTable.durationSec] = 15
+                it[TakesTable.mime] = "audio/mp4"
+                it[TakesTable.sizeBytes] = 100000L
+                it[TakesTable.storage] = "supabase"
+                it[TakesTable.storageKey] = "$userA/take1.m4a"
+                it[TakesTable.memo] = ""
+            }
+            TakesTable.insert {
+                it[TakesTable.id] = UUID.randomUUID()
+                it[TakesTable.userId] = userA
+                it[TakesTable.songId] = songUuid
+                it[TakesTable.sessionId] = session2Id
+                it[TakesTable.recordedAt] = OffsetDateTime.parse("2026-10-30T14:22:10Z")
+                it[TakesTable.a] = BigDecimal("38.0")
+                it[TakesTable.b] = BigDecimal("55.2")
+                it[TakesTable.rate] = BigDecimal("0.75")
+                it[TakesTable.durationSec] = 18
+                it[TakesTable.mime] = "audio/mp4"
+                it[TakesTable.sizeBytes] = 284120L
+                it[TakesTable.storage] = "supabase"
+                it[TakesTable.storageKey] = "$userA/take2.m4a"
+                it[TakesTable.memo] = ""
+            }
+        }
+
+        val getRes = client.get("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, getRes.status)
+        assertEquals("no-store", getRes.headers[HttpHeaders.CacheControl])
+
+        val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
+        val songObj = json["song"]!!.jsonObject
+        assertEquals(1560L, songObj["totalSeconds"]!!.jsonPrimitive.long)
+        assertEquals(14, songObj.keys.size)
+
+        val sessionsArr = json["sessions"]!!.jsonArray
+        assertEquals(2, sessionsArr.size)
+        val s0 = sessionsArr[0].jsonObject
+        assertEquals("2026-10-30", s0["date"]!!.jsonPrimitive.content)
+        assertEquals(16.0, s0["minutes"]!!.jsonPrimitive.double)
+        assertEquals("0:38\u20130:55", s0["segment"]!!.jsonPrimitive.content)
+        assertEquals(24, s0["loops"]!!.jsonPrimitive.int)
+        assertEquals(0.75, s0["rate"]!!.jsonPrimitive.double)
+        assertEquals("좋음", s0["memo"]!!.jsonPrimitive.content)
+        assertEquals(10, s0.keys.size)
+
+        val s1 = sessionsArr[1].jsonObject
+        assertEquals("2026-10-28", s1["date"]!!.jsonPrimitive.content)
+        assertEquals(10, s1.keys.size)
+
+        val takesArr = json["takes"]!!.jsonArray
+        assertEquals(2, takesArr.size)
+        val t0 = takesArr[0].jsonObject
+        assertEquals("2026-10-30T14:22:10Z", t0["recordedAt"]!!.jsonPrimitive.content)
+        assertEquals(12, t0.keys.size)
+
+        val t1 = takesArr[1].jsonObject
+        assertEquals("2026-10-28T10:00:00Z", t1["recordedAt"]!!.jsonPrimitive.content)
+        assertEquals(12, t1.keys.size)
+    }
+
+    @Test
+    fun `S14 곡 상세 빈 하위 목록`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        ensureUser(client, tokenA)
+
+        val postRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"11111111111","title":"Song Y"}""")
+        }
+        assertEquals(HttpStatusCode.Created, postRes.status)
+        val songId = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        val getRes = client.get("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.OK, getRes.status)
+        val json = Json.parseToJsonElement(getRes.bodyAsText()).jsonObject
+        val songObj = json["song"]!!.jsonObject
+        assertEquals(0L, songObj["totalSeconds"]!!.jsonPrimitive.long)
+        assertEquals(0, json["sessions"]!!.jsonArray.size)
+        assertEquals(0, json["takes"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun `S15 곡 상세 404(없는 곡·남의 곡·비 UUID)`() = testApplication {
+        configureApiTestApp(dbConfig)
+        val userA = UUID.randomUUID()
+        val tokenA = TestJwt.token(userA)
+        val userB = UUID.randomUUID()
+        val tokenB = TestJwt.token(userB)
+        ensureUser(client, tokenA)
+        ensureUser(client, tokenB)
+
+        val postRes = client.post("/api/v1/songs") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            contentType(ContentType.Application.Json)
+            setBody("""{"videoId":"dQw4w9WgXcQ","title":"Song X"}""")
+        }
+        assertEquals(HttpStatusCode.Created, postRes.status)
+        val songId = Json.parseToJsonElement(postRes.bodyAsText()).jsonObject["song"]!!.jsonObject["id"]!!.jsonPrimitive.content
+
+        // 1. 남의 곡(B 토큰으로 A의 곡 X 요청)
+        val resB = client.get("/api/v1/songs/$songId") {
+            header(HttpHeaders.Authorization, "Bearer $tokenB")
+        }
+        assertEquals(HttpStatusCode.NotFound, resB.status)
+        assertStandardError(resB.bodyAsText(), 404, "NOT_FOUND")
+
+        // 2. A 토큰으로 없는 UUID
+        val missingUuid = UUID.randomUUID()
+        val resMissing = client.get("/api/v1/songs/$missingUuid") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.NotFound, resMissing.status)
+        assertStandardError(resMissing.bodyAsText(), 404, "NOT_FOUND")
+
+        // 3. 비 UUID
+        val resInvalid = client.get("/api/v1/songs/not-a-uuid") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+        }
+        assertEquals(HttpStatusCode.NotFound, resInvalid.status)
+        assertStandardError(resInvalid.bodyAsText(), 404, "NOT_FOUND")
+    }
 }

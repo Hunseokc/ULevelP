@@ -101,6 +101,14 @@ fun Route.registerSongRoutes(
             call.respond(HttpStatusCode.OK, response)
         }
 
+        get("/{songId}") {
+            val user = call.requireAuthUser()
+            val songId = parsePathUuid(call.parameters["songId"])
+            val detail = songService.getDetail(user.id, songId)
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respond(HttpStatusCode.OK, detail)
+        }
+
         patch("/{songId}") {
             val user = call.requireAuthUser()
             val songId = parsePathUuid(call.parameters["songId"])
