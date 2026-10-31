@@ -60,22 +60,22 @@ Running 7 tests using 1 worker
 
 Running 7 tests using 1 worker
 
-     1 …/e2e/xss.spec.js:378:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기
-  ✘  1 …s.spec.js:378:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 (5.7s)
-     2 …e/xss.spec.js:397:1 › E2 플레이어(practice.html) 곡 제목 및 곡 목록 서랍
-  ✓  2 …ec.js:397:1 › E2 플레이어(practice.html) 곡 제목 및 곡 목록 서랍 (896ms)
-     3 …2e/xss.spec.js:413:1 › E3 기록 화면(log.html) 기록 탭·세션 목록·녹음 URL
-  ✓  3 …pec.js:413:1 › E3 기록 화면(log.html) 기록 탭·세션 목록·녹음 URL (825ms)
-     4 …› test/e2e/xss.spec.js:434:1 › E4 기록 화면(log.html#songs) 곡 보관함 탭
-  ✓  4 …2e/xss.spec.js:434:1 › E4 기록 화면(log.html#songs) 곡 보관함 탭 (678ms)
-     5 ….spec.js:451:1 › E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교
-  ✓  5 …:451:1 › E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교 (822ms)
-     6 …est/e2e/xss.spec.js:472:1 › E6 설정 화면(settings.html) 계정 프로필 표시
-  ✓  6 …xss.spec.js:472:1 › E6 설정 화면(settings.html) 계정 프로필 표시 (840ms)
-     7 [chromium] › test/e2e/xss.spec.js:489:1 › E7 대조군(검출기 작동 확인)
-  ✓  7 …mium] › test/e2e/xss.spec.js:489:1 › E7 대조군(검출기 작동 확인) (921ms)
+     1 …/e2e/xss.spec.js:382:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기
+  ✘  1 …s.spec.js:382:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 (5.7s)
+     2 …e/xss.spec.js:401:1 › E2 플레이어(practice.html) 곡 제목 및 곡 목록 서랍
+  ✓  2 …pec.js:401:1 › E2 플레이어(practice.html) 곡 제목 및 곡 목록 서랍 (1.4s)
+     3 …2e/xss.spec.js:417:1 › E3 기록 화면(log.html) 기록 탭·세션 목록·녹음 URL
+  ✓  3 …spec.js:417:1 › E3 기록 화면(log.html) 기록 탭·세션 목록·녹음 URL (1.1s)
+     4 …› test/e2e/xss.spec.js:438:1 › E4 기록 화면(log.html#songs) 곡 보관함 탭
+  ✓  4 …e2e/xss.spec.js:438:1 › E4 기록 화면(log.html#songs) 곡 보관함 탭 (1.0s)
+     5 ….spec.js:455:1 › E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교
+  ✓  5 …s:455:1 › E5 곡 상세 화면(log.html?song=...) 타임라인 및 A/B 비교 (1.2s)
+     6 …est/e2e/xss.spec.js:476:1 › E6 설정 화면(settings.html) 계정 프로필 표시
+  ✓  6 …xss.spec.js:476:1 › E6 설정 화면(settings.html) 계정 프로필 표시 (918ms)
+     7 [chromium] › test/e2e/xss.spec.js:493:1 › E7 대조군(검출기 작동 확인)
+  ✓  7 …omium] › test/e2e/xss.spec.js:493:1 › E7 대조군(검출기 작동 확인) (1.2s)
 
-  1) [chromium] › test/e2e/xss.spec.js:378:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 
+  1) [chromium] › test/e2e/xss.spec.js:382:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 
 
     Error: Timed out 5000ms waiting for expect(locator).toContainText(expected)
 
@@ -89,18 +89,18 @@ Running 7 tests using 1 worker
           - unexpected value "연습중 · 1× · 10/30">연습중 · 0.75× · 10/29javascript:window.__xss=1완료 · 1× · 10/28' onclick='window.__xss=1보류 · 0.5× · 10/27"
 
 
-      385 |   // 곡 목록 로드 대기 (첫 곡의 텍스트가 표시될 때까지)
-      386 |   const songsList = page.locator('#songs');
-    > 387 |   await expect(songsList).toContainText('<img src=x onerror="window.__xss=1">');
+      389 |   // 곡 목록 로드 대기 (첫 곡의 텍스트가 표시될 때까지)
+      390 |   const songsList = page.locator('#songs');
+    > 391 |   await expect(songsList).toContainText('<img src=x onerror="window.__xss=1">');
           |                           ^
-      388 |
-      389 |   // #nlPractice 숨김 확인
-      390 |   const nlPractice = page.locator('#nlPractice');
-        at /Users/seokhunchoi/code/ULevelP/test/e2e/xss.spec.js:387:27
+      392 |
+      393 |   // #nlPractice 숨김 확인
+      394 |   const nlPractice = page.locator('#nlPractice');
+        at /Users/seokhunchoi/code/ULevelP/test/e2e/xss.spec.js:391:27
 
   1 failed
-    [chromium] › test/e2e/xss.spec.js:378:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 
-  6 passed (11.5s)
+    [chromium] › test/e2e/xss.spec.js:382:1 › E1 첫 화면(index.html) 곡 목록 및 노션 바로가기 
+  6 passed (13.3s)
 ```
 (확인 후 `public/home.js`의 `esc(s.title)` 즉시 원복 완료)
 
@@ -145,14 +145,15 @@ BUILD SUCCESSFUL in 2s
 
 ---
 
-## 3. C0가 쓸 값 (`setupMockAuthAndApi` 헬퍼 시그니처)
+## 3. C0가 쓸 값 (`setupMockAuthAndApi` 헬퍼 시그니처 및 테스트 추가 방식)
 
-`test/e2e/xss.spec.js`의 모킹 헬퍼는 K3-1(노션 ZIP 미리보기), K4-1(연동 키 관리), K5-2(학습 노트 뷰어)에서 E2E 테스트 케이스를 추가할 때 다음과 같이 사용합니다:
+명세 앞머리에 명시된 대로 **"해당 화면들의 페이로드 검사는 각 step에서 `test/e2e/xss.spec.js` 파일에 케이스를 추가한다"** 원칙을 따릅니다.
+Playwright는 test 파일이 다른 test 파일을 import하는 것을 허용하지 않으므로(`test file "..." should not import test file "..."`), `test/e2e/xss.spec.js` 내에 직접 케이스를 추가하거나, 헬퍼를 `test/e2e/helpers.js` 등으로 별도 분리할지는 **C0 결정 필요** 사항입니다.
+
+### `test/e2e/xss.spec.js`에 테스트 케이스 추가 시 예시
 
 ```js
-const { test, expect } = require('@playwright/test');
-const { setupMockAuthAndApi, assertNoXssOrCsp, PAYLOADS } = require('./xss.spec.js');
-
+// test/e2e/xss.spec.js 하단에 케이스 추가 (별도 require 불필요)
 test('K3-1 노션 백업 ZIP 미리보기 XSS 검사 예시', async ({ page }) => {
   // 1. 필요한 응답 오버라이드
   await setupMockAuthAndApi(page, {
@@ -204,9 +205,16 @@ test('K3-1 노션 백업 ZIP 미리보기 XSS 검사 예시', async ({ page }) =
 3. **Playwright URL 매칭 시 경로 세그먼트 매칭:**
    - **문제:** `**/api/v1/songs**` glob 패턴이 `api/v1/songs/by-video/{id}` 및 `api/v1/songs/{id}`와 정확히 매칭되지 않고 실제 백엔드로 전달되어 404가 발생함.
    - **해결:** `url => url.pathname.startsWith('/api/v1/songs')` 함수 핸들러로 URL을 수신하여 내부에서 `by-video`, `migrate-local`, 단일 id, 목록 조회를 명확하게 분기 처리함.
+4. **Playwright test 파일 간 import 제약 (PR #20 리뷰 1번):**
+   - **문제:** `test/e2e/xss.spec.js`에서 `module.exports`를 노출하고 다른 spec 파일에서 `require('./xss.spec.js')`로 가져오려 할 경우 Playwright 러너가 `test file should not import test file` 에러를 발생시키며 실행을 차단함.
+   - **해결:** `test/e2e/xss.spec.js`에서 `module.exports`를 제거하고, 명세 원칙대로 `xss.spec.js` 파일 내에 직접 후속 케이스를 추가하는 방식으로 안내를 수정함 (헬퍼 별도 파일 분리 여부는 C0에서 결정).
+5. **공통 단언의 인라인 이벤트 핸들러 속성 검출 보강 (PR #20 리뷰 2번):**
+   - **문제:** 명세 4절 3번 단언은 `img[src="x"], svg[onload]` 태그 및 `javascript:` URL만 검사하여, `P_ATTR`(`' onclick='window.__xss=1`) 주입으로 생성된 인라인 핸들러 속성(클릭 전에는 실행되지 않아 `window.__xss`나 CSP 위반이 발생하지 않음)을 탐지하지 못하는 명세 누락이 있었음.
+   - **해결:** `assertNoXssOrCsp`에 인라인 이벤트 핸들러 속성(`[onclick], [onerror], [onload], [onmouseover], [onfocus]`) 미존재(`count === 0`) 단언을 추가함 (CSP 정책상 정상 앱 코드에는 인라인 이벤트 핸들러 속성이 없으므로 안전하게 검출됨).
 
 ---
 
 ## 5. 단계 완료 및 다음 단계
 
 B 묶음(K2-1, K2-2, X2) 단계 완료하였습니다. 다음 진행은 문서 보강 및 검토 후 진행이 필요합니다.
+

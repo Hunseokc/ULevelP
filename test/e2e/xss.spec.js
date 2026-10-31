@@ -368,6 +368,10 @@ async function assertNoXssOrCsp(page) {
   const badElements = await page.locator('img[src="x"], svg[onload]').count();
   expect(badElements).toBe(0);
 
+  // 3-1. 인라인 이벤트 핸들러 속성 미생성 (PR #20 리뷰 2번: P_ATTR 및 미실행 인라인 핸들러 검출)
+  const inlineHandlers = await page.locator('[onclick], [onerror], [onload], [onmouseover], [onfocus]').count();
+  expect(inlineHandlers).toBe(0);
+
   // 4. 위험한 javascript: 속성 미생성
   const badLinks = await page.locator('a[href^="javascript:"], audio[src^="javascript:"]').count();
   expect(badLinks).toBe(0);
@@ -505,8 +509,3 @@ test('E7 대조군(검출기 작동 확인)', async ({ page }) => {
   expect(violations.length).toBeGreaterThanOrEqual(2);
 });
 
-module.exports = {
-  setupMockAuthAndApi,
-  assertNoXssOrCsp,
-  PAYLOADS,
-};
