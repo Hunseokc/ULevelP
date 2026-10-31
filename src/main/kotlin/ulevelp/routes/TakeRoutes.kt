@@ -71,12 +71,19 @@ fun Route.registerTakeRoutes(
                         when (part) {
                             is PartData.FormItem -> {
                                 if (part.name == "metadata") {
+                                    if (part.value.toByteArray(Charsets.UTF_8).size > TakeService.MAX_METADATA_BYTES) {
+                                        throw InvalidInputException("metadata가 너무 큽니다.")
+                                    }
                                     metadataRaw = part.value
                                 }
                             }
                             is PartData.FileItem -> {
                                 if (part.name == "metadata") {
-                                    metadataRaw = part.provider().readRemaining(65536).readByteArray().toString(Charsets.UTF_8)
+                                    val bytes = part.provider().readRemaining(TakeService.MAX_METADATA_BYTES + 1).readByteArray()
+                                    if (bytes.size > TakeService.MAX_METADATA_BYTES) {
+                                        throw InvalidInputException("metadata가 너무 큽니다.")
+                                    }
+                                    metadataRaw = bytes.toString(Charsets.UTF_8)
                                 } else if (part.name == "file") {
                                     fileBytes = part.provider().readRemaining(TakeService.MAX_FILE_BYTES + 1).readByteArray()
                                 }

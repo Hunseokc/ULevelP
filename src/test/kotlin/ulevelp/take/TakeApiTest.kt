@@ -1011,4 +1011,82 @@ class TakeApiTest {
         assertTrue(json["ok"]!!.jsonPrimitive.boolean)
         assertNotNull(json["take"]!!.jsonObject["id"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun `T21 metadata 한도(64KB) 초과 시 400 Bad Request 거부`() = testApplication {
+        configureApiTestApp(dbConfig, storageClient = fake)
+        ensureUser(client, tokenA)
+        val songId = createTestSong(client, tokenA)
+
+        // 64KB(65536)를 초과하는 metadata 생성
+        val oversizedJson = buildJsonObject {
+            put("songId", songId)
+            put("date", today.toString())
+            put("recordedAt", DateTimeFormatter.ISO_INSTANT.format(OffsetDateTime.now(ZoneOffset.UTC).toInstant()))
+            put("durationSec", 10)
+            put("mime", "audio/mp4")
+            put("dummy", "a".repeat(65536))
+        }.toString()
+
+        // 1. FileItem 경로: filename="blob" 포함 시 400 및 메시지 확인
+        val fileItemRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            "metadata",
+                            oversizedJson.toByteArray(Charsets.UTF_8),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "application/json")
+                                append(HttpHeaders.ContentDisposition, "filename=\"blob\"")
+                            }
+                        )
+                        append(
+                            "file",
+                            ByteArray(100),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, fileItemRes.status)
+        val fileItemJson = Json.parseToJsonElement(fileItemRes.bodyAsText()).jsonObject
+        assertEquals("INVALID_INPUT", fileItemJson["code"]?.jsonPrimitive?.content)
+        assertEquals("metadata가 너무 큽니다.", fileItemJson["message"]?.jsonPrimitive?.content)
+
+        // 2. FormItem 경로: filename 없는 일반 텍스트 파트도 400 및 메시지 확인
+        val formItemRes = client.post("/api/v1/takes") {
+            header(HttpHeaders.Authorization, "Bearer $tokenA")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            "metadata",
+                            oversizedJson,
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "application/json")
+                            }
+                        )
+                        append(
+                            "file",
+                            ByteArray(100),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "audio/mp4")
+                                append(HttpHeaders.ContentDisposition, "filename=\"take.m4a\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, formItemRes.status)
+        val formItemJson = Json.parseToJsonElement(formItemRes.bodyAsText()).jsonObject
+        assertEquals("INVALID_INPUT", formItemJson["code"]?.jsonPrimitive?.content)
+        assertEquals("metadata가 너무 큽니다.", formItemJson["message"]?.jsonPrimitive?.content)
+    }
 }
