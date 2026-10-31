@@ -51,6 +51,21 @@ jobs:
       # 외부 의존성이 없으므로 install 단계 없이 바로 테스트합니다
       - run: npm test
 
+  e2e-security:
+    name: E2E XSS & CSP (Playwright)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
   # Kotlin 서버(K0-1 이후). gradlew가 생기면 CI 수정 없이 ./gradlew test가 돌기 시작합니다
   kotlin:
     name: Kotlin test (JDK 21)
@@ -104,7 +119,7 @@ jobs:
   ci-ok:
     name: CI ok
     runs-on: ubuntu-latest
-    needs: [changes, test, kotlin, docker]
+    needs: [changes, test, e2e-security, kotlin, docker]
     if: always()
     steps:
       - env:
@@ -116,7 +131,7 @@ jobs:
   deploy-pages:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    needs: [test, kotlin, docker]
+    needs: [test, e2e-security, kotlin, docker]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
