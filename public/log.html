@@ -77,13 +77,77 @@
     </div>
   </section>
 
-  <!-- 곡 탭 패널 (K2-2에서 연결) -->
+  <!-- 곡 탭 패널 (FR-LIB-1) -->
   <section id="pane-songs" role="tabpanel" aria-labelledby="tab-songs" hidden>
-    <p class="empty">곡 보관함은 다음 단계(K2-2)에서 연결됩니다.</p>
+    <div class="seg-pill" id="songFilters" role="group" aria-label="곡 상태 필터">
+      <button type="button" data-status="" aria-pressed="true">전체</button><button type="button" data-status="practicing" aria-pressed="false">연습 중</button><button type="button" data-status="paused" aria-pressed="false">보류</button><button type="button" data-status="done" aria-pressed="false">완료</button>
+    </div>
+    <div class="log-sessions" id="songList"></div>
   </section>
 
-  <!-- 곡 상세 패널 (K2-2에서 사용) -->
-  <section id="pane-song-detail" hidden></section>
+  <!-- 곡 상세 패널 (FR-LIB-2, FR-LIB-3) -->
+  <section id="pane-song-detail" hidden>
+    <div class="panel">
+      <div class="row">
+        <button type="button" class="ghost mini" id="btnBackSongs">← 곡 목록</button>
+      </div>
+      <div>
+        <h2 class="h3" id="detailTitle"></h2>
+        <span class="meta" id="detailArtist"></span>
+      </div>
+      <div class="meta" id="detailMeta"></div>
+      <div class="row">
+        <a class="cta" id="detailResume" href="#">▶ 이어서 연습</a>
+        <select id="detailStatus" aria-label="곡 상태">
+          <option value="practicing">연습 중</option>
+          <option value="paused">보류</option>
+          <option value="done">완료</option>
+        </select>
+        <button type="button" class="ghost" id="btnDeleteSong">곡 삭제</button>
+      </div>
+      <div class="field">
+        <label class="lab" for="detailMemo">곡 메모</label>
+        <textarea id="detailMemo" class="inp" rows="2" maxlength="2000" placeholder="곡 메모"></textarea>
+        <div class="row"><button type="button" class="ghost" id="btnSaveSongMemo">저장</button></div>
+      </div>
+    </div>
+
+    <!-- 연습 시간 막대 타임라인 (FR-LIB-2) -->
+    <div class="panel">
+      <div class="head-row">
+        <h3 class="h3">연습 세션 타임라인</h3>
+      </div>
+      <div id="detailTimeline"></div>
+    </div>
+
+    <!-- 녹음 목록 및 A/B 비교 듣기 (FR-LIB-3) -->
+    <div class="panel">
+      <div class="head-row">
+        <h3 class="h3">녹음 테이크 목록</h3>
+      </div>
+      <div id="detailTakes"></div>
+
+      <!-- A/B 비교 패널 -->
+      <div class="panel" id="abPanel" hidden>
+        <div class="head-row">
+          <h4 class="h3">녹음 A/B 비교 듣기</h4>
+          <span class="meta">과거 녹음과 최근 녹음 교차 비교</span>
+        </div>
+        <div class="ab-slots">
+          <div class="ab-slot" id="abSlotA">
+            <span class="meta" id="abLabelA">A (과거 녹음)</span>
+            <button type="button" class="ghost mini" id="abPlayA">▶ 재생</button>
+            <audio id="abAudioA" controls preload="none"></audio>
+          </div>
+          <div class="ab-slot" id="abSlotB">
+            <span class="meta" id="abLabelB">B (최근 녹음)</span>
+            <button type="button" class="ghost mini" id="abPlayB">▶ 재생</button>
+            <audio id="abAudioB" controls preload="none"></audio>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script src="config.js"></script>

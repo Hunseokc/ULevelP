@@ -497,3 +497,66 @@ test('D13 takes.getUrl & takes.remove: 서명 URL 발급 GET 및 녹음 삭제 D
   assert.equal(env.apiCalls[1].path, '/api/v1/takes/t-1');
   assert.equal(env.apiCalls[1].opts.method, 'DELETE');
 });
+
+test('D14 비로그인 거부: songs.get, songs.update, songs.remove는 401 reject 반환', async () => {
+  const env = createMockEnv({ session: null });
+  const funcs = [
+    () => env.ULData.songs.get('id'),
+    () => env.ULData.songs.update('id', { status: 'done' }),
+    () => env.ULData.songs.remove('id'),
+  ];
+  for (const fn of funcs) {
+    await assert.rejects(
+      () => fn(),
+      (err) => {
+        assert.equal(err.code, 'NOT_LOGGED_IN');
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+  }
+  assert.equal(env.apiCalls.length, 0);
+});
+
+test('D15 songs.get & songs.remove: 상세 조회 GET 및 곡 삭제 DELETE', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { song: { id: 'song-1' }, sessions: [], takes: [] },
+  });
+
+  // ① songs.get('song-1')
+  const detail = await env.ULData.songs.get('song-1');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/songs/song-1');
+  assert.deepEqual({ ...detail.song }, { id: 'song-1' });
+
+  // ② songs.remove('song-1')
+  const res = await env.ULData.songs.remove('song-1');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/songs/song-1');
+  assert.equal(env.apiCalls[1].opts.method, 'DELETE');
+  assert.deepEqual({ ...res }, { ok: true });
+});
+
+test('D16 songs.update 필드 정제: patch 객체에서 status, memo, title 키만 추출', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { song: { id: 'song-1', status: '보류', memo: 'm' } },
+  });
+
+  const updated = await env.ULData.songs.update('song-1', {
+    status: '보류',
+    memo: 'm',
+    extra: 'x',
+    title: undefined,
+  });
+
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/songs/song-1');
+  assert.equal(env.apiCalls[0].opts.method, 'PATCH');
+  const sentBody = JSON.parse(env.apiCalls[0].opts.body);
+  assert.deepEqual(Object.keys(sentBody).sort(), ['memo', 'status']);
+  assert.equal(sentBody.status, '보류');
+  assert.equal(sentBody.memo, 'm');
+  assert.deepEqual({ ...updated }, { id: 'song-1', status: '보류', memo: 'm' });
+});

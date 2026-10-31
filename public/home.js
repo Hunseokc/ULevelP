@@ -2,7 +2,7 @@
 'use strict';
 (function () {
   const $ = (id) => document.getElementById(id);
-  const { raw, videoIdFrom, thumb, esc, safeUrl, notion } = UL;
+  const { raw, videoIdFrom, thumb, esc, safeUrl } = UL;
 
   // ---------- 링크 붙여넣기 ----------
   function pick() {
@@ -25,25 +25,53 @@
     '<li' + (id === last ? ' class="cur"' : '') + '><a href="chords.html#' + encodeURIComponent(id) + '"><span class="t">' + (i + 1) + ' · ' + esc(name) + '</span>' +
     '<span class="m">' + (id === last ? '이어서' : '') + '</span></a></li>').join('');
 
-  // ---------- 플레이어: 노션의 연습 곡 ----------
-  function songsNote(t, toSettings) {
-    $('songs').innerHTML = '<li class="note">' + (toSettings ? '<a href="settings.html#notion">' + esc(t) + '</a>' : esc(t)) + '</li>';
+  // ---------- 플레이어: 내 연습 곡 ----------
+  function songsNote(t, toLogin) {
+    $('songs').innerHTML = '<li class="note">' + (toLogin ? '<a href="settings.html#account">' + esc(t) + '</a>' : esc(t)) + '</li>';
   }
+  let songsReqUid = null;
   async function loadSongs() {
-    if (!notion.ok()) return songsNote('SETTING에서 노션을 연결하면 연습 곡이 여기 보여요', true);
+    const D = window.ULData;
+    if (!D || !D.isLoggedIn()) return songsNote('로그인하면 내 연습 곡이 여기 보여요', true);
+    const u = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+    const myUid = u ? u.id : null;
+    if (!myUid) return songsNote('로그인하면 내 연습 곡이 여기 보여요', true);
+    songsReqUid = myUid;
     songsNote('불러오는 중…');
     try {
-      const songs = ((await notion.call('/songs')).songs || []).slice(0, 5);
+      const list = await D.songs.list();
+      const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+      const curUid = curU ? curU.id : null;
+      if (songsReqUid !== curUid) return;
+      const songs = (list || []).slice(0, 5);
       if (!songs.length) return songsNote('아직 곡이 없어요. 위에 링크를 붙여넣어 시작하세요');
       $('songs').innerHTML = songs.map((s) => {
         const meta = [s.status, s.rate ? s.rate + '×' : '', s.lastDate ? s.lastDate.slice(5).replace('-', '/') : ''].filter(Boolean).join(' · ');
         return '<li><a href="practice.html?v=' + encodeURIComponent(s.videoId) + '"><span class="t">' + esc(s.title) + '</span><span class="m">' + esc(meta) + '</span></a></li>';
       }).join('');
     } catch (e) {
-      songsNote(e.message);
+      const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+      const curUid = curU ? curU.id : null;
+      if (songsReqUid !== curUid) return;
+      songsNote((e && e.message) || '곡 목록을 불러오지 못했어요');
     }
   }
-  loadSongs();
+
+  let lastSongsUid = undefined;
+  function handleAuthChange(state) {
+    const u = (state && state.user) || (window.ULAuth && typeof window.ULAuth.getUser === 'function' && window.ULAuth.getUser()) || null;
+    const uid = u ? u.id : null;
+    if (uid !== lastSongsUid) {
+      lastSongsUid = uid;
+      loadSongs();
+    }
+  }
+
+  if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
+    window.ULAuth.onChange(handleAuthChange);
+  } else {
+    loadSongs();
+  }
 
   // ---------- 노션 바로가기 (https 링크만) ----------
   const links = [['nlPractice', safeUrl(raw.get('ulp:notion-practice'))], ['nlNotes', safeUrl(raw.get('ulp:notion-notes'))]];

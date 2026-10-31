@@ -50,6 +50,27 @@ data class SongEnvelope(val song: SongDto?)
 data class SongListResponse(val songs: List<SongDto>)
 
 @Serializable
+data class SongSessionDto(
+    val id: String,
+    val date: String,
+    val seconds: Int,
+    val minutes: Double,
+    val loops: Int,
+    val a: Double?,
+    val b: Double?,
+    val segment: String,
+    val rate: Double?,
+    val memo: String
+)
+
+@Serializable
+data class SongDetailResponse(
+    val song: SongDto,
+    val sessions: List<SongSessionDto>,
+    val takes: List<TakeDto>
+)
+
+@Serializable
 data class MigrateLocalResponse(
     val created: Int,
     val skipped: Int,
@@ -156,6 +177,52 @@ class SongService(
         val database = requireDb()
         return DatabaseFactory.dbQuery(database) {
             loadSongDto(userId = userId, videoId = videoId)
+        }
+    }
+
+    suspend fun getDetail(userId: UUID, songId: UUID): SongDetailResponse {
+        val database = requireDb()
+        return DatabaseFactory.dbQuery(database) {
+            val songRow = SongsTable.selectAll()
+                .where { (SongsTable.id eq songId) and (SongsTable.userId eq userId) }
+                .singleOrNull() ?: throw NotFoundException("곡을 찾을 수 없습니다.")
+
+            val sessionRows = SessionsTable.selectAll()
+                .where { (SessionsTable.userId eq userId) and (SessionsTable.songId eq songId) }
+                .orderBy(SessionsTable.date to SortOrder.DESC, SessionsTable.updatedAt to SortOrder.DESC)
+                .toList()
+
+            val totalSec = sessionRows.sumOf { it[SessionsTable.seconds].toLong() }
+            val songDto = rowToDto(songRow, totalSec)
+
+            val sessions = sessionRows.map { row ->
+                val sec = row[SessionsTable.seconds]
+                val aVal = row[SessionsTable.a]
+                val bVal = row[SessionsTable.b]
+                SongSessionDto(
+                    id = row[SessionsTable.id].toString(),
+                    date = row[SessionsTable.date].toString(),
+                    seconds = sec,
+                    minutes = SessionService.toMinutes(sec),
+                    loops = row[SessionsTable.loops],
+                    a = aVal?.toDouble(),
+                    b = bVal?.toDouble(),
+                    segment = SessionService.formatSegment(aVal, bVal),
+                    rate = row[SessionsTable.rate]?.toDouble(),
+                    memo = row[SessionsTable.memo]
+                )
+            }
+
+            val takes = TakesTable.selectAll()
+                .where { (TakesTable.userId eq userId) and (TakesTable.songId eq songId) }
+                .orderBy(TakesTable.recordedAt to SortOrder.DESC)
+                .map { SessionService.rowToTakeDto(it) }
+
+            SongDetailResponse(
+                song = songDto,
+                sessions = sessions,
+                takes = takes
+            )
         }
     }
 
