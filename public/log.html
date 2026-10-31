@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://script.google.com https://script.googleusercontent.com https://api.github.com; frame-src https://www.youtube.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>연습 기록 · ULeveLP</title>
+<meta name="description" content="최근 12주 연습 달력과 곡별 기록·녹음을 한눈에 확인해요.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ULeveLP">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="page log-page">
+  <nav class="site-nav" aria-label="사이트">
+    <a href="./">⌂ HOME</a>
+    <span class="links"><a href="log.html" aria-current="page">LOG</a><a href="notes.html">NOTES</a><a href="settings.html">SETTING</a><a href="settings.html#account" id="navAuth">LOGIN</a></span>
+  </nav>
+
+  <header id="logHeader">
+    <h1 class="page-title">Log</h1>
+    <p class="page-sub">최근 12주 연습 달력과 곡별 기록·녹음을 한눈에 확인해요.</p>
+    <nav class="tabs" id="logTabs" role="tablist" aria-label="기록 보기">
+      <button type="button" class="tab" role="tab" id="tab-log" aria-selected="true">기록</button>
+      <button type="button" class="tab" role="tab" id="tab-songs" aria-selected="false">곡</button>
+    </nav>
+  </header>
+
+  <p class="msg" id="logMsg" role="status"></p>
+
+  <div class="panel" id="logGuest" hidden>
+    <p>Google 계정으로 로그인하면 연습 달력과 녹음 기록을 볼 수 있어요.</p>
+    <div class="row"><a class="cta" href="settings.html#account">로그인하러 가기</a></div>
+  </div>
+
+  <!-- 기록 탭 패널 -->
+  <section id="pane-log" role="tabpanel" aria-labelledby="tab-log">
+    <!-- 1. 주간·월간 요약 -->
+    <div class="log-summary">
+      <div class="summary-card">
+        <span class="summary-title">이번 주 총 연습</span>
+        <span class="summary-val" id="sumWeek">0분</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-title">이번 달 총 연습</span>
+        <span class="summary-val" id="sumMonth">0분</span>
+      </div>
+    </div>
+
+    <!-- 2. 12주 연습 달력 -->
+    <div class="panel">
+      <div class="head-row">
+        <h2 class="h3">최근 12주 연습 달력</h2>
+        <span class="meta" id="calRange"></span>
+      </div>
+      <div class="cal-grid" id="calGrid" role="grid" aria-label="최근 12주 연습 달력"></div>
+      <div class="cal-legend" aria-hidden="true">
+        <span>적음</span>
+        <i class="lv0"></i>
+        <i class="lv1"></i>
+        <i class="lv2"></i>
+        <i class="lv3"></i>
+        <i class="lv4"></i>
+        <span>많음</span>
+      </div>
+    </div>
+
+    <!-- 3. 선택한 날짜 세션 목록 -->
+    <div id="daySection">
+      <h2 id="dayTitle">연습 기록</h2>
+      <div class="log-sessions" id="daySessions"></div>
+    </div>
+  </section>
+
+  <!-- 곡 탭 패널 (K2-2에서 연결) -->
+  <section id="pane-songs" role="tabpanel" aria-labelledby="tab-songs" hidden>
+    <p class="empty">곡 보관함은 다음 단계(K2-2)에서 연결됩니다.</p>
+  </section>
+
+  <!-- 곡 상세 패널 (K2-2에서 사용) -->
+  <section id="pane-song-detail" hidden></section>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script src="auth.js"></script>
+<script src="data.js"></script>
+<script src="log.js"></script>
+</body>
+</html>

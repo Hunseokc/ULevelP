@@ -165,6 +165,41 @@ window.ULData = (function () {
     return out;
   }
 
+  async function listSessions(params) {
+    requireLogin();
+    params = params || {};
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.today) qs.set('today', params.today);
+    const queryString = qs.toString();
+    const path = '/api/v1/sessions' + (queryString ? '?' + queryString : '');
+    return await window.ULAuth.apiFetch(path);
+  }
+
+  async function updateMemo(sessionId, memo) {
+    requireLogin();
+    const path = '/api/v1/sessions/' + encodeURIComponent(sessionId);
+    return await window.ULAuth.apiFetch(path, {
+      method: 'PATCH',
+      body: JSON.stringify({ memo: String(memo ?? '') }),
+    });
+  }
+
+  async function getTakeUrl(takeId) {
+    requireLogin();
+    const path = '/api/v1/takes/' + encodeURIComponent(takeId) + '/url';
+    return await window.ULAuth.apiFetch(path);
+  }
+
+  async function removeTake(takeId) {
+    requireLogin();
+    const path = '/api/v1/takes/' + encodeURIComponent(takeId);
+    return await window.ULAuth.apiFetch(path, {
+      method: 'DELETE',
+    });
+  }
+
   async function runLocalMigration() {
     if (!isLoggedIn()) {
       return { status: 'skipped', created: 0, skipped: 0, message: '' };
@@ -236,9 +271,15 @@ window.ULData = (function () {
       byVideo,
       create,
     },
+    sessions: {
+      list: listSessions,
+      updateMemo,
+    },
     saveProgress,
     takes: {
       upload,
+      getUrl: getTakeUrl,
+      remove: removeTake,
     },
     runLocalMigration,
   };

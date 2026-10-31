@@ -27,11 +27,13 @@ import ulevelp.routes.registerMeRoutes
 import ulevelp.routes.registerPracticeRoutes
 import ulevelp.routes.registerSongRoutes
 import ulevelp.routes.registerTakeRoutes
+import ulevelp.routes.registerSessionRoutes
 import ulevelp.service.PracticeService
 import ulevelp.service.ProfileService
 import ulevelp.service.SongService
 import ulevelp.service.StorageTrashService
 import ulevelp.service.TakeService
+import ulevelp.service.SessionService
 import ulevelp.service.VideoMetaClient
 import ulevelp.service.YoutubeOEmbedClient
 import ulevelp.storage.StorageClient
@@ -100,6 +102,7 @@ fun Application.module(
     val practiceService = PracticeService(db)
     val storageTrashService = StorageTrashService(db, storageClient)
     val takeService = TakeService(db, storageClient)
+    val sessionService = SessionService(db)
 
     install(CORS) {
         allowMethod(HttpMethod.Options)
@@ -185,6 +188,7 @@ fun Application.module(
             registerSongRoutes(jwtVerifier, profileService, songService, storageTrashService)
             registerPracticeRoutes(jwtVerifier, profileService, practiceService)
             registerTakeRoutes(jwtVerifier, profileService, takeService, storageTrashService)
+            registerSessionRoutes(jwtVerifier, profileService, sessionService)
 
             route("{...}") {
                 handle {

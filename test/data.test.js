@@ -80,6 +80,7 @@ function createMockEnv({
     ULAuth: mockULAuth,
     FormData,
     Blob,
+    URLSearchParams,
     ULEVELP_CONFIG: { apiBaseUrl: '' },
     console,
   };
@@ -425,4 +426,74 @@ test('D9 이관 실패: 서버 에러 시 failed 반환, fetchMe 미호출, 재�
   const res2 = await env.ULData.runLocalMigration();
   assert.equal(res2.status, 'failed');
   assert.equal(env.confirmCalls.length, 2);
+});
+
+test('D10 비로그인 거부: sessions·takes 신규 함수 4종 모두 Promise reject 및 api 호출 0건', async () => {
+  const env = createMockEnv({ session: null });
+  const funcs = [
+    () => env.ULData.sessions.list(),
+    () => env.ULData.sessions.updateMemo('s1', 'm'),
+    () => env.ULData.takes.getUrl('t1'),
+    () => env.ULData.takes.remove('t1'),
+  ];
+
+  for (const fn of funcs) {
+    await assert.rejects(
+      () => fn(),
+      (err) => {
+        assert.equal(err.code, 'NOT_LOGGED_IN');
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+  }
+  assert.equal(env.apiCalls.length, 0);
+});
+
+test('D11 sessions.list 쿼리 조합: 파라미터 유무에 따른 URLSearchParams 쿼리 생성', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { summary: { thisWeekSeconds: 0, thisMonthSeconds: 0 }, calendar: [], sessions: [] },
+  });
+
+  // ① 파라미터 없음
+  await env.ULData.sessions.list();
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/sessions');
+
+  // ② from, to, today 파라미터 있음
+  await env.ULData.sessions.list({ from: '2026-10-01', to: '2026-10-30', today: '2026-10-30' });
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/sessions?from=2026-10-01&to=2026-10-30&today=2026-10-30');
+});
+
+test('D12 sessions.updateMemo: PATCH 메서드 및 본문 memo JSON 직렬화', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { ok: true },
+  });
+
+  await env.ULData.sessions.updateMemo('s-1', '메모');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/sessions/s-1');
+  assert.equal(env.apiCalls[0].opts.method, 'PATCH');
+  assert.deepEqual(JSON.parse(env.apiCalls[0].opts.body), { memo: '메모' });
+});
+
+test('D13 takes.getUrl & takes.remove: 서명 URL 발급 GET 및 녹음 삭제 DELETE', async () => {
+  const env = createMockEnv({
+    session: { access_token: 'tok' },
+    apiResponse: { ok: true },
+  });
+
+  // ① getUrl -> GET /api/v1/takes/{id}/url
+  await env.ULData.takes.getUrl('t-1');
+  assert.equal(env.apiCalls.length, 1);
+  assert.equal(env.apiCalls[0].path, '/api/v1/takes/t-1/url');
+
+  // ② remove -> DELETE /api/v1/takes/{id}
+  await env.ULData.takes.remove('t-1');
+  assert.equal(env.apiCalls.length, 2);
+  assert.equal(env.apiCalls[1].path, '/api/v1/takes/t-1');
+  assert.equal(env.apiCalls[1].opts.method, 'DELETE');
 });

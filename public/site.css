@@ -101,3 +101,56 @@ body.home { padding-top: 12px; }
 .seg-pill { display: inline-flex; border: 1px solid var(--line); border-radius: 9999px; padding: 4px; gap: 4px; align-self: flex-start; }
 .seg-pill button { font: inherit; font-size: 15px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: transparent; color: var(--muted); cursor: pointer; }
 .seg-pill button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
+
+/* ---------- 연습 기록 (log.html) ---------- */
+.log-page { padding-bottom: 60px; }
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9999px; padding: 4px; gap: 4px; align-self: flex-start; margin-top: 4px; }
+.tab { font: inherit; font-size: 15px; min-height: 40px; padding: 0 20px; border: 0; border-radius: 9999px; background: transparent; color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
+
+.log-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.summary-card { background: var(--surface); border: 1px solid var(--line); padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.summary-title { font-size: 13px; font-weight: 700; color: var(--muted); }
+.summary-val { font-family: var(--font-display); font-weight: 900; font-size: clamp(24px, 5vw, 36px); line-height: 1.1; color: var(--ink); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.h3 { font-size: 15px; font-weight: 700; color: var(--ink); margin: 0; }
+.meta { font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+
+.cal-grid { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; }
+.cal-day { aspect-ratio: 1; padding: 0; border-radius: 0; cursor: pointer; background: transparent; border: 1px solid var(--line); min-width: 0; display: block; width: 100%; }
+.cal-day.lv0 { background: transparent; border-color: var(--line); }
+.cal-day.lv1 { background: var(--surface2); border-color: var(--other-line); }
+.cal-day.lv2 { background: var(--guide); border-color: var(--root); }
+.cal-day.lv3 { background: var(--muted); border-color: var(--ink); }
+.cal-day.lv4 { background: var(--ink); border-color: var(--ink); }
+.cal-day[aria-pressed="true"] { outline: 2px solid var(--now-ring); outline-offset: 1px; }
+
+.cal-legend { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.cal-legend i { width: 12px; height: 12px; display: inline-block; border: 1px solid var(--line); }
+.cal-legend i.lv0 { background: transparent; border-color: var(--line); }
+.cal-legend i.lv1 { background: var(--surface2); border-color: var(--other-line); }
+.cal-legend i.lv2 { background: var(--guide); border-color: var(--root); }
+.cal-legend i.lv3 { background: var(--muted); border-color: var(--ink); }
+.cal-legend i.lv4 { background: var(--ink); border-color: var(--ink); }
+
+.log-sessions { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+.card.session-card { background: var(--surface); border: 1px solid var(--line); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.session-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.session-title { font-weight: 700; font-size: 16px; color: var(--ink); }
+.ghost.mini { font: inherit; font-size: 13px; font-weight: 700; padding: 4px 12px; min-height: 32px; border-radius: 9999px; border: 1px solid var(--line); background: transparent; color: var(--ink); text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.ghost.mini:hover { border-color: var(--ink); }
+.ghost.mini:disabled { opacity: .4; cursor: default; }
+
+.session-memo { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.session-memo textarea { min-height: 56px; font-size: 14px; }
+.session-memo-act { display: flex; align-items: center; gap: 10px; }
+
+.session-takes { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.take-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.take-meta { font-weight: 500; color: var(--ink); }
+.take-row audio { width: 100%; max-width: 360px; height: 36px; margin-top: 4px; }
+
+.empty { color: var(--muted); font-size: 14px; margin: 0; padding: 16px 0; }
+

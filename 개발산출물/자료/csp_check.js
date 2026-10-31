@@ -44,6 +44,8 @@ const PAGES = [
     expect: `({ local: localStorage.getItem('ulp:v:${VIDEO}'), old: localStorage.getItem('pp:v:${VIDEO}'), sync: document.getElementById('syncState').textContent })` },
   { name: '학습 노트 + GitHub API(connect-src)', url: 'notes.html?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D' + VIDEO, before: { 'sn-token': 'x', 'sn-repo': 'Hunseokc/ULevelP' },
     expect: `({ preview: document.querySelector('#preview img').src, runs: document.getElementById('runs').textContent.slice(0, 60) })` },
+  { name: '기록 화면 비로그인 (log.html)', url: 'log.html',
+    expect: `({ guestVisible: !document.getElementById('logGuest').hidden, title: document.querySelector('.page-title').textContent })` },
   { name: '설정 + 테마 버튼', url: 'settings.html', act: `document.querySelector('[data-theme="light"]').click()`,
     expect: `({ theme: document.documentElement.dataset.theme, saved: localStorage.getItem('ulp:theme'), old: localStorage.getItem('gv-theme') })` },
   // 대조군: 검출기가 살아 있는지. 허용 안 된 주소로 fetch, style 속성 삽입 → 위반이 잡혀야 OK
