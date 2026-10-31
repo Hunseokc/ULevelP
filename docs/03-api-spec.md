@@ -1,6 +1,6 @@
 # 03. 기능 API 명세서 (Kotlin Ktor + Google Cloud Run)
 
-> **문서 버전:** 2026-10-30
+> **문서 버전:** 2026-10-31
 > **Base URL:** `https://<cloud-run-domain>` (로컬 개발 시 `http://localhost:3000`)
 
 ---
@@ -147,7 +147,7 @@
 - **Response:** 새로 만들면 `201 Created`, 같은 `videoId` 곡이 이미 있으면 `200 OK`. 본문은 둘 다 `{ "song": { ... } }`.
 
 ### 3.4 곡 상세 조회 (타임라인 및 녹음 목록 포함)
-- **`GET /api/v1/songs/{songId}`** — K2-2에서 구현(A0 결정). `takes[]` 항목은 5.1의 녹음 객체(`TakeDto`, 12개 필드)와 같습니다.
+- **`GET /api/v1/songs/{songId}`** — K2-2에서 구현(A0·B0 결정, 구현 상세는 `개발산출물/명세/K2-2_구현명세.md`). `sessions[]`는 `date DESC, updatedAt DESC` 순(10개 필드), `takes[]`는 `recordedAt DESC` 순이며 항목은 5.1의 녹음 객체(`TakeDto`, 12개 필드)와 같습니다. 없는 곡·남의 곡·비 UUID는 `404 NOT_FOUND`.
 - **설명:** 곡 상세 화면(`log.html?song={songId}`)을 위한 API로, 곡 정보와 날짜별 연습 세션 타임라인, 녹음 테이크 목록을 함께 반환합니다(`FR-LIB-2`).
 - **Response (`200 OK`):**
 ```json
@@ -243,7 +243,8 @@
   "keep": false,
   "sessionId": "s1000000-0000-4000-8000-000000000001",
   "totalSeconds": 990,
-  "minutes": 16.5
+  "minutes": 16.5,
+  "pendingSeconds": null
 }
 ```
 - 응답은 항상 위 6개 키(`ok`, `keep`, `sessionId`, `totalSeconds`, `minutes`, `pendingSeconds`)이고 해당 없는 칸은 `null`입니다. `totalSeconds`는 그 세션의 합산 후 `seconds`, `minutes`는 소수 1자리.
@@ -253,8 +254,11 @@
 
 ### 4.2 기간별 연습 기록 및 12주 달력 조회
 - **`GET /api/v1/sessions`**
-- **Query Params:** `from=2026-08-01&to=2026-10-30` (기본값: 오늘 기준 최근 12주)
-- **설명:** 기록 화면(`log.html`)을 위해 이번 주·이번 달 총 시간, 날짜별 합산 달력 데이터, 상세 세션 목록(녹음 메타데이터 포함)을 반환합니다(`FR-LOG-1` ~ `3`).
+- **Query Params:** `from=2026-08-08&to=2026-10-30&today=2026-10-30` (모두 선택. `today` 생략 시 서버 UTC 오늘 날짜, `to` 생략 시 `today`, `from` 생략 시 `to - 83일`[최근 12주 = 84일]. `from > to` 또는 기간이 366일을 넘으면 `400 INVALID_INPUT`)
+- **설명:** 기록 화면(`log.html`)을 위해 이번 주·이번 달 총 시간, 날짜별 합산 달력 데이터, 상세 세션 목록(녹음 메타데이터 포함)을 반환합니다(`FR-LOG-1` ~ `3`, 구현 상세는 `개발산출물/명세/K2-1_구현명세.md`).
+  - `summary`: `from`/`to` 범위와 무관하게 `today`가 속한 주(월~일)와 달(1일~말일)의 전체 연습 시간(초) 합계.
+  - `calendar`: `[from, to]` 범위 내 `totalSeconds > 0`인 날짜만 오름차순 반환. `level`은 `1..899`초 → `1`, `900..1799`초 → `2`, `1800..3599`초 → `3`, `>= 3600`초 → `4`.
+  - `sessions`: `[from, to]` 범위 내 세션을 `date DESC, updatedAt DESC` 순으로 반환(15개 필드), 내부 `takes[]`는 `recordedAt ASC` 순(`TakeDto` 12개 필드).
 - **Response (`200 OK`):**
 ```json
 {
@@ -263,8 +267,8 @@
     "thisMonthSeconds": 19800
   },
   "calendar": [
-    { "date": "2026-10-29", "totalSeconds": 1800, "level": 2 },
-    { "date": "2026-10-30", "totalSeconds": 3600, "level": 3 }
+    { "date": "2026-10-29", "totalSeconds": 1800, "level": 3 },
+    { "date": "2026-10-30", "totalSeconds": 3600, "level": 4 }
   ],
   "sessions": [
     {
@@ -275,6 +279,7 @@
       "videoId": "dQw4w9WgXcQ",
       "date": "2026-10-30",
       "seconds": 990,
+      "minutes": 16.5,
       "loops": 26,
       "a": 38.0,
       "b": 55.2,
@@ -289,7 +294,7 @@
 
 ### 4.3 세션 메모 수정
 - **`PATCH /api/v1/sessions/{sessionId}`**
-- **Request Body:** `{ "memo": "메트로놈 80bpm 연습 병행" }`
+- **Request Body:** `{ "memo": "메트로놈 80bpm 연습 병행" }` (`memo` 필수, 문자열 2000자 이하, 빈 문자열 허용. 없는 세션·남의 세션·비 UUID는 `404 NOT_FOUND`, 노션 연동 시 `sync_outbox` `session` `upsert` 적재)
 - **Response (`200 OK`):** `{ "ok": true }`
 
 ---
@@ -498,7 +503,7 @@
 
 ## 9. 코드 연습실 계산 API (기존 `server.js` 100% 호환)
 
-기존 [`server.js`](../server.js)가 제공하던 8개 엔드포인트를 동일한 쿼리 파라미터와 JSON 응답 스펙으로 제공합니다.
+기존 [server.js](../server.js)가 제공하던 8개 엔드포인트를 동일한 쿼리 파라미터와 JSON 응답 스펙으로 제공합니다.
 
 | Method & Path | Query Params 예시 | 설명 |
 | --- | --- | --- |
@@ -510,4 +515,3 @@
 | `GET /api/matrix` | `?root=C&drop=d2&inv=0&span=4` | 드롭 × 전위 × 줄 세트 × 9개 성질 매트릭스 |
 | `GET /api/scale` | `?root=A&type=pentMin&tuning=g6&lo=5&hi=8` (또는 `&circle=5`) | 스케일 구성음 및 지판 위치 / 12키 순환 변화음 |
 | `GET /api/interpret` | `?frets=x,x,4,2,2,4` | 6번줄~1번줄 프렛 배열 코드 재해석 |
-
