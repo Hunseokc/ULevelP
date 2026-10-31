@@ -355,7 +355,10 @@
                 s.takes = s.takes.filter(function (it) {
                   return it.id !== t.id;
                 });
-                renderDaySessions();
+                row.remove();
+                if (!s.takes || s.takes.length === 0) {
+                  takesDiv.remove();
+                }
               })
               .catch(function (err) {
                 alert((err && err.message) || '녹음 삭제에 실패했어요');
@@ -376,8 +379,10 @@
   async function loadLog() {
     setMsg('기록을 불러오는 중...');
     const t = todayStr();
+    const reqUid = currentUid;
     try {
       const data = await window.ULData.sessions.list({ today: t });
+      if (reqUid !== currentUid) return;
       sessionsData = data || { summary: { thisWeekSeconds: 0, thisMonthSeconds: 0 }, calendar: [], sessions: [] };
       setMsg('');
 
@@ -394,6 +399,7 @@
       renderCalendar();
       renderDaySessions();
     } catch (e) {
+      if (reqUid !== currentUid) return;
       setMsg((e && e.message) || '연습 기록을 불러오지 못했어요', 'err');
     }
   }
