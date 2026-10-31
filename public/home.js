@@ -33,12 +33,15 @@
   async function loadSongs() {
     const D = window.ULData;
     if (!D || !D.isLoggedIn()) return songsNote('로그인하면 내 연습 곡이 여기 보여요', true);
-    const myUid = window.ULAuth && typeof window.ULAuth.getMe === 'function' && window.ULAuth.getMe() ? window.ULAuth.getMe().id : 'logged_in';
+    const u = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+    const myUid = u ? u.id : null;
+    if (!myUid) return songsNote('로그인하면 내 연습 곡이 여기 보여요', true);
     songsReqUid = myUid;
     songsNote('불러오는 중…');
     try {
       const list = await D.songs.list();
-      const curUid = window.ULAuth && typeof window.ULAuth.getMe === 'function' && window.ULAuth.getMe() ? window.ULAuth.getMe().id : 'logged_in';
+      const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+      const curUid = curU ? curU.id : null;
       if (songsReqUid !== curUid) return;
       const songs = (list || []).slice(0, 5);
       if (!songs.length) return songsNote('아직 곡이 없어요. 위에 링크를 붙여넣어 시작하세요');
@@ -47,14 +50,27 @@
         return '<li><a href="practice.html?v=' + encodeURIComponent(s.videoId) + '"><span class="t">' + esc(s.title) + '</span><span class="m">' + esc(meta) + '</span></a></li>';
       }).join('');
     } catch (e) {
-      const curUid = window.ULAuth && typeof window.ULAuth.getMe === 'function' && window.ULAuth.getMe() ? window.ULAuth.getMe().id : 'logged_in';
+      const curU = window.ULAuth && typeof window.ULAuth.getUser === 'function' ? window.ULAuth.getUser() : null;
+      const curUid = curU ? curU.id : null;
       if (songsReqUid !== curUid) return;
       songsNote((e && e.message) || '곡 목록을 불러오지 못했어요');
     }
   }
-  loadSongs();
+
+  let lastSongsUid = undefined;
+  function handleAuthChange(state) {
+    const u = (state && state.user) || (window.ULAuth && typeof window.ULAuth.getUser === 'function' && window.ULAuth.getUser()) || null;
+    const uid = u ? u.id : null;
+    if (uid !== lastSongsUid) {
+      lastSongsUid = uid;
+      loadSongs();
+    }
+  }
+
   if (window.ULAuth && typeof window.ULAuth.onChange === 'function') {
-    window.ULAuth.onChange(() => { loadSongs(); });
+    window.ULAuth.onChange(handleAuthChange);
+  } else {
+    loadSongs();
   }
 
   // ---------- 노션 바로가기 (https 링크만) ----------

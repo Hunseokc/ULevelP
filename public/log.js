@@ -16,6 +16,9 @@
   let currentDetailSong = null; // { song, sessions, takes }
   let abSelected = []; // [takeId1, takeId2]
   let detailTakesMap = new Map();
+  let logReqSeq = 0;
+  let songsReqSeq = 0;
+  let detailReqSeq = 0;
 
   function todayStr() {
     const d = new Date();
@@ -97,6 +100,9 @@
   }
 
   function resetState() {
+    logReqSeq++;
+    songsReqSeq++;
+    detailReqSeq++;
     sessionsData = null;
     selectedDate = null;
     songsCache = null;
@@ -107,7 +113,9 @@
     document.querySelectorAll('audio').forEach(function (a) {
       try {
         a.pause();
-        a.src = '';
+        a.removeAttribute('src');
+        a.load();
+        delete a.dataset.takeId;
       } catch (_) {}
     });
 
@@ -334,13 +342,14 @@
               return;
             }
             if (t.storage === 'supabase') {
-              if (!audio.src) {
+              if (audio.dataset.takeId !== t.id) {
                 playBtn.disabled = true;
                 msgSpan.textContent = '주소 요청 중...';
                 window.ULData.takes.getUrl(t.id)
                   .then(function (r) {
                     if (r && r.url) {
                       audio.src = safeUrl(r.url);
+                      audio.dataset.takeId = t.id;
                       audio.hidden = false;
                       msgSpan.textContent = '';
                       audio.play().catch(function () {});
@@ -366,6 +375,12 @@
             delBtn.disabled = true;
             window.ULData.takes.remove(t.id)
               .then(function () {
+                try {
+                  audio.pause();
+                  audio.removeAttribute('src');
+                  audio.load();
+                  delete audio.dataset.takeId;
+                } catch (_) {}
                 s.takes = s.takes.filter(function (it) {
                   return it.id !== t.id;
                 });
@@ -394,9 +409,10 @@
     setMsg('기록을 불러오는 중...');
     const t = todayStr();
     const reqUid = currentUid;
+    const seq = ++logReqSeq;
     try {
       const data = await window.ULData.sessions.list({ today: t });
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== logReqSeq) return;
       sessionsData = data || { summary: { thisWeekSeconds: 0, thisMonthSeconds: 0 }, calendar: [], sessions: [] };
       setMsg('');
 
@@ -412,7 +428,7 @@
       renderCalendar();
       renderDaySessions();
     } catch (e) {
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== logReqSeq) return;
       setMsg((e && e.message) || '연습 기록을 불러오지 못했어요', 'err');
     }
   }
@@ -421,14 +437,15 @@
   async function loadSongsTab() {
     setMsg('곡 목록을 불러오는 중...');
     const reqUid = currentUid;
+    const seq = ++songsReqSeq;
     try {
       const list = await window.ULData.songs.list(currentSongFilter);
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== songsReqSeq) return;
       songsCache = list || [];
       setMsg('');
       renderSongList();
     } catch (e) {
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== songsReqSeq) return;
       setMsg((e && e.message) || '곡 목록을 불러오지 못했어요', 'err');
     }
   }
@@ -579,14 +596,15 @@
   async function loadSongDetail(songId) {
     setMsg('곡 상세 정보를 불러오는 중...');
     const reqUid = currentUid;
+    const seq = ++detailReqSeq;
     try {
       const data = await window.ULData.songs.get(songId);
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== detailReqSeq) return;
       currentDetailSong = data;
       setMsg('');
       renderSongDetail();
     } catch (e) {
-      if (reqUid !== currentUid) return;
+      if (reqUid !== currentUid || seq !== detailReqSeq) return;
       setMsg((e && e.message) || '곡 상세 정보를 불러오지 못했어요', 'err');
     }
   }
@@ -826,13 +844,14 @@
           return;
         }
         if (t.storage === 'supabase') {
-          if (!audio.src) {
+          if (audio.dataset.takeId !== t.id) {
             playBtn.disabled = true;
             msgSpan.textContent = '주소 요청 중...';
             window.ULData.takes.getUrl(t.id)
               .then(function (r) {
                 if (r && r.url) {
                   audio.src = safeUrl(r.url);
+                  audio.dataset.takeId = t.id;
                   audio.hidden = false;
                   msgSpan.textContent = '';
                   audio.play().catch(function () {});
@@ -858,6 +877,12 @@
         delBtn.disabled = true;
         window.ULData.takes.remove(t.id)
           .then(function () {
+            try {
+              audio.pause();
+              audio.removeAttribute('src');
+              audio.load();
+              delete audio.dataset.takeId;
+            } catch (_) {}
             abSelected = abSelected.filter(function (id) { return id !== t.id; });
             detailTakesMap.delete(t.id);
             if (currentDetailSong && Array.isArray(currentDetailSong.takes)) {
@@ -893,8 +918,18 @@
 
     if (abSelected.length !== 2) {
       abPanel.hidden = true;
-      if (audioA) { audioA.pause(); audioA.src = ''; }
-      if (audioB) { audioB.pause(); audioB.src = ''; }
+      if (audioA) {
+        audioA.pause();
+        audioA.removeAttribute('src');
+        audioA.load();
+        delete audioA.dataset.takeId;
+      }
+      if (audioB) {
+        audioB.pause();
+        audioB.removeAttribute('src');
+        audioB.load();
+        delete audioB.dataset.takeId;
+      }
       return;
     }
 
@@ -910,6 +945,20 @@
     if (t1.recordedAt > t2.recordedAt) {
       takeA = t2;
       takeB = t1;
+    }
+
+    // 슬롯에 실려있는 takeId가 달라졌다면 오디오 리셋 (리뷰 2번 반영)
+    if (audioA && audioA.dataset.takeId !== takeA.id) {
+      audioA.pause();
+      audioA.removeAttribute('src');
+      audioA.load();
+      delete audioA.dataset.takeId;
+    }
+    if (audioB && audioB.dataset.takeId !== takeB.id) {
+      audioB.pause();
+      audioB.removeAttribute('src');
+      audioB.load();
+      delete audioB.dataset.takeId;
     }
 
     const descA = takeA.recordedAt ? takeA.recordedAt.slice(0, 16).replace('T', ' ') : '';
@@ -931,13 +980,16 @@
     // 재생 버튼 연결
     async function playSlot(take, audio, btn) {
       if (!audio) return;
-      if (!audio.src) {
+      if (audio.dataset.takeId !== take.id) {
         btn.disabled = true;
         try {
           const r = await window.ULData.takes.getUrl(take.id);
           if (r && r.url) {
             audio.src = safeUrl(r.url);
+            audio.dataset.takeId = take.id;
             await audio.play();
+          } else {
+            alert('녹음 재생 주소를 받지 못했어요');
           }
         } catch (err) {
           alert((err && err.message) || '녹음 재생 주소를 받지 못했어요');
