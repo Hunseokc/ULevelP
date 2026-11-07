@@ -1,0 +1,30 @@
+{
+  "name": "guitar-chord-lab",
+  "version": "1.0.0",
+  "description": "기타 코드 연습실: 코드톤 지도, 드롭 보이싱 매트릭스, 탑노트 5도권, 보이싱 재해석, 2-5-1 탐색",
+  "private": true,
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "dev:client": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.62.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.7.2",
+    "vite": "5.4.11"
+  }
+}

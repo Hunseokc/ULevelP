@@ -1,0 +1,271 @@
+/* frontend/src/pages/ProgressionsPage.module.css — CHORDS 코드 진행 모음 (CH-5) */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 112%;
+  font-size: clamp(36px, 7vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 12px 0 8px;
+  text-transform: uppercase;
+}
+
+.pageSub {
+  margin: 0;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.headActs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.scope {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.scope button {
+  font: inherit;
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.scope button + button {
+  border-left: 1px solid var(--line);
+}
+
+.scope button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.addPanel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.loginGate {
+  margin: 0;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.tabs button {
+  font: inherit;
+  font-size: 15px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tabs button[aria-selected='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.savedBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--guide);
+  color: var(--guide-ink);
+  border: 1px solid var(--line);
+  font-weight: 700;
+}
+
+.linkBtn {
+  font: inherit;
+  font-size: 13px;
+  background: none;
+  border: 0;
+  color: var(--link);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+.listCol {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jobs li {
+  padding: 12px 16px;
+  border: 1px dashed var(--line);
+  background: var(--surface2);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.jobActive {
+  border-color: var(--now-ring) !important;
+}
+
+.jobFail {
+  color: var(--bad);
+}
+
+/* GA-1: 실패 원인 안내 */
+.jobHint {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.seedNote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.empty {
+  border: 1px dashed var(--line);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.empty p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.tasteCol {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tasteCol h2 {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0;
+  font-weight: 700;
+}
+
+/* CH-5b: 목록 검색·정렬 */
+.listTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.search {
+  font: inherit;
+  flex: 1 1 200px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--ink);
+}
+.sortLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sortLabel select {
+  font: inherit;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--ink);
+}

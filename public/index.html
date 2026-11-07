@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://www.googleapis.com; frame-src https://www.youtube.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ULeveLP</title>
+<meta name="description" content="코드 연습, 유튜브 구간 연습, 학습 영상 노트를 한곳에서">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ULeveLP">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<script src="theme.js"></script>
+</head>
+<body class="home">
+<div class="home-wrap">
+  <nav class="site-nav" aria-label="사이트">
+    <a href="./" aria-current="page">⌂ HOME</a>
+    <span class="links"><a href="chords.html">CHORDS</a><a href="log.html">LOG</a><a href="notes.html">NOTES</a><a href="settings.html">SETTING</a><a href="settings.html#account" id="navAuth">LOGIN</a></span>
+  </nav>
+
+  <h1 class="wordmark">ULeveLP</h1>
+  <hr class="home-rule">
+  <p class="tagline">DIVE INTO SOUND</p>
+
+  <!-- 링크 하나로 시작: 바로 연습하거나 학습 노트로 정리 -->
+  <form class="go" id="go">
+    <input class="inp" id="goUrl" type="url" inputmode="url" autocomplete="off" placeholder="유튜브 링크를 붙여넣으세요" aria-label="유튜브 링크">
+    <div class="go-pick" id="goPick" hidden>
+      <img id="goThumb" alt="">
+      <div class="acts">
+        <a class="cta" id="goPlay" href="practice.html">▶ 바로 연습</a>
+        <a class="sec" id="goNote" href="notes.html">노트 만들기</a>
+      </div>
+    </div>
+    <p class="msg" id="goMsg" role="status"></p>
+  </form>
+
+  <!-- 상단 연속성 위젯: 주간 스트릭(Mo~Su)·작심삼일 + 가장 최근 연습했던 곡 -->
+  <section class="home-top-widgets" aria-label="연습 연속성 대시보드">
+    <div class="streak-card" id="weeklyStreakCard">
+      <div class="widget-head">
+        <h2 class="widget-title">WEEKLY STREAK</h2>
+        <a class="widget-link" href="log.html">기록 보기 →</a>
+      </div>
+      <div class="streak-days" id="streakDays"></div>
+      <a class="streak-bar" id="streakChallengeBar" href="log.html">
+        <span id="streakChallengeText">작심삼일 도전하기 · 오늘 첫 연습을 시작해 보세요</span>
+        <span class="streak-dots" id="streakDots" aria-hidden="true"></span>
+      </a>
+    </div>
+
+    <div class="recent-song-card" id="recentSongCard">
+      <div class="widget-head">
+        <h2 class="widget-title">가장 최근 연습했던 곡</h2>
+        <a class="widget-link" id="recentSongGo" href="practice.html" hidden>(바로가기)</a>
+      </div>
+      <div class="recent-song-body" id="recentSongBody" hidden>
+        <img class="recent-song-thumb" id="recentSongThumb" alt="">
+        <div class="recent-song-info">
+          <p class="recent-song-title" id="recentSongTitle"></p>
+          <p class="recent-song-seg" id="recentSongSegment"></p>
+          <a class="widget-link" id="recentSongResume" href="practice.html">▶ 이어서 구간 연습하기 →</a>
+        </div>
+      </div>
+      <div class="recent-song-body" id="recentSongEmpty">
+        <div class="recent-placeholder">NO SONG</div>
+        <div class="recent-song-info">
+          <p class="recent-song-seg">아직 연습 중인 곡이 없어요. 위 입력창에 유튜브 링크를 붙여넣어 시작하세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 하단 분할 대시보드: 좌측 BETTER (연습실) | 우측 VAULT (학습) -->
+  <div class="frames">
+    <section class="frame" id="betterFrame" aria-labelledby="fBetter">
+      <div class="frame-head"><h2 id="fBetter">BETTER</h2><span>연습실</span></div>
+      <div class="better-grid">
+        <div class="better-col">
+          <div class="sub-col-head">
+            <h3 class="sub-col-title">CHORDS · 7가지 연습 모드</h3>
+          </div>
+          <ul class="frame-list" id="modes"></ul>
+        </div>
+        <div class="better-col">
+          <div class="sub-col-head">
+            <h3 class="sub-col-title">PLAYER · 내 연습 곡</h3>
+            <a class="widget-link" href="settings.html#keys">노션 연결 →</a>
+          </div>
+          <ul class="frame-list" id="songs"></ul>
+        </div>
+      </div>
+      <div class="frame-actions">
+        <a class="sec more" href="chords.html">코드 연습실 열기</a>
+        <a class="sec more" href="practice.html">플레이어 열기</a>
+      </div>
+    </section>
+
+    <section class="frame" id="vaultFrame" aria-labelledby="fVault">
+      <div class="frame-head"><h2 id="fVault">VAULT</h2><span>학습</span></div>
+      <div class="vault-stack">
+        <div class="vault-block" id="recentNoteCard">
+          <div class="sub-col-head">
+            <h3 class="sub-col-title">최근 공부한 내용</h3>
+            <a class="widget-link" href="notes.html">전체 노트 →</a>
+          </div>
+          <div class="recent-note-box" id="recentNoteBody" hidden>
+            <img class="recent-note-thumb" id="recentNoteThumb" alt="">
+            <div class="recent-note-info">
+              <p class="recent-note-title" id="recentNoteTitle"></p>
+              <p class="recent-note-sub" id="recentNoteHeadline"></p>
+              <div class="recent-note-foot">
+                <a class="widget-link" id="recentNoteLink" href="notes.html">확인하기 →</a>
+              </div>
+            </div>
+          </div>
+          <div class="recent-note-box" id="recentNoteEmpty">
+            <div class="recent-placeholder">NO NOTE</div>
+            <div class="recent-note-info">
+              <p class="recent-note-sub">아직 생성한 학습 노트가 없어요.</p>
+              <div class="recent-note-foot">
+                <a class="widget-link" href="notes.html">노트 만들러 가기 →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="vault-block" id="progressionPickerSection">
+          <div class="sub-col-head">
+            <h3 class="sub-col-title">취향 코드 진행 꺼내보기</h3>
+            <a class="widget-link" href="chords.html#reint">보이싱 탐색 →</a>
+          </div>
+          <div class="prog-grid">
+            <div class="prog-card" id="progRefBox">
+              <div class="prog-head">
+                <span class="prog-badge">REFERENCE</span>
+                <span class="prog-key" id="progRefKey">C Major</span>
+              </div>
+              <a class="prog-chords" id="progRefChords" href="chords.html#reint">CM7 - C7 - F#m7b5 - Fm6</a>
+              <p class="prog-sub" id="progRefTitle">Neo-Soul Minor Plagal Cadence · 출처: 기본</p>
+              <button class="rand-btn" id="btnRandRef" type="button"># 랜덤으로 보여주기</button>
+            </div>
+
+            <div class="prog-card" id="progArchBox">
+              <div class="prog-head">
+                <span class="prog-badge">ARCHIVE</span>
+                <span class="prog-key" id="progArchKey">C Major</span>
+              </div>
+              <a class="prog-chords" id="progArchChords" href="chords.html#tf">Dm9 - G13 - CM9 - A7b13</a>
+              <p class="prog-sub" id="progArchTitle">Drop 2 가이드톤 2-5-1-6 순환 · 출처: 기본</p>
+              <button class="rand-btn" id="btnRandArch" type="button"># 랜덤으로 보여주기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-actions">
+        <a class="sec more" href="notes.html">학습 노트 열기</a>
+      </div>
+    </section>
+  </div>
+
+  <a class="notion-big" id="notionBig" href="settings.html#links">NOTION</a>
+  <div class="notion-links" id="notionLinks" hidden>
+    <a id="nlPractice" target="_blank" rel="noopener" hidden>악기 연습 ↗</a>
+    <a id="nlNotes" target="_blank" rel="noopener" hidden>학습 영상 노트 ↗</a>
+  </div>
+
+  <footer class="home-foot"><span>DAILY DIARY</span><a href="privacy.html">PRIVACY</a><span id="copy">©2026</span></footer>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script src="auth.js"></script>
+<script src="data.js"></script>
+<script src="home.js"></script>
+</body>
+</html>

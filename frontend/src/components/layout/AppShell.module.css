@@ -1,0 +1,153 @@
+.shell {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.playerShell {
+  width: 100%;
+  max-width: var(--player-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.siteNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  width: 100%;
+  max-width: var(--container-max);
+  min-height: var(--header-height);
+  margin: 0 auto;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.brandLink {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 8px 2px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.brandLink:hover,
+.navItem:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.brandLink[aria-current="page"],
+.navItem[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.navMain {
+  display: flex;
+  align-items: center;
+  gap: 0 20px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.navItemDisabled,
+.navItemDisabled:hover {
+  color: var(--muted);
+  opacity: 0.55;
+  text-decoration: none;
+  cursor: default;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.navItem {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 8px 2px;
+  white-space: nowrap;
+}
+
+.siteFoot {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.themeGroup {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+
+.themeBtn {
+  font: inherit;
+  font-size: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.themeBtn[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.mainDefault {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.mainNarrow {
+  width: 100%;
+  max-width: var(--page-narrow-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.mainPlayer {
+  width: 100%;
+  max-width: var(--player-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+

@@ -1,0 +1,8 @@
+services:
+  guitar-chord-lab:
+    build: .
+    image: guitar-chord-lab:latest
+    container_name: guitar-chord-lab
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://www.googleapis.com; frame-src https://www.youtube.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학습 노트 · ULeveLP</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="page">
+  <nav class="site-nav" aria-label="사이트">
+    <a href="./">⌂ HOME</a>
+    <span class="links"><a href="log.html">LOG</a><a href="notes.html" aria-current="page">NOTES</a><a href="settings.html">SETTING</a><a href="settings.html#account" id="navAuth">LOGIN</a></span>
+  </nav>
+
+  <div>
+    <h1 class="page-title">Notes</h1>
+    <p class="page-sub">유튜브 링크와 태그를 넣으면 Gemini가 영상을 분석해서 학습 노트를 생성하고 노션에 자동 정리해요. 보통 1~3분 걸려요. <a id="notionLink" target="_blank" rel="noopener" hidden>노션에서 보기 ↗</a></p>
+  </div>
+
+  <div class="card key-gate-box" id="keyGateBox" hidden>
+    <p id="keyGateMsg"></p>
+    <div class="row">
+      <button class="cta" type="button" id="btnKeyGateModal">🔑 1분 무료 키 발급 &amp; 바로 연결하기</button>
+      <a href="settings.html#keys">SETTING에서 Gemini 키 등록 →</a>
+    </div>
+  </div>
+
+  <form class="note-form" id="form">
+    <label class="field">
+      <span class="lab">유튜브 링크</span>
+      <input class="inp" id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+      <span class="preview" id="preview"><img alt=""><span class="hint">영상을 확인했어요</span></span>
+    </label>
+    <div class="field">
+      <span class="lab">태그</span>
+      <div class="tags" id="tags" role="group" aria-label="태그"></div>
+      <span class="hint">고른 태그에 맞춰 정리 항목이 달라져요. 여러 개 골라도 됩니다.</span>
+    </div>
+    <label class="field">
+      <span class="lab">메모 <span class="hint">(선택)</span></span>
+      <textarea class="inp" id="memo" placeholder="예: 3:20부터 나오는 보이싱 위주로"></textarea>
+    </label>
+    <div class="row">
+      <button class="cta" id="submit" type="submit">분석 요청</button>
+    </div>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+
+  <h2>진행 및 최근 작업</h2>
+  <ul class="runs" id="jobs"><li class="empty">작업 내역이 없어요.</li></ul>
+
+  <h2>내 학습 노트</h2>
+  <div class="tags filter-tags" id="noteTagFilter" role="group" aria-label="노트 태그 필터"></div>
+  <div class="notes-list" id="notesList"><p class="empty">저장된 학습 노트가 없어요.</p></div>
+
+  <div class="modal-backdrop" id="geminiOnboardingModal" role="dialog" aria-modal="true" aria-labelledby="gemModalTitle" hidden>
+    <div class="onboarding-modal">
+      <div class="card-head">
+        <div>
+          <h2 id="gemModalTitle">AI 기능을 무료로 이용하기 위한 1분 설정</h2>
+          <p class="hint">Google의 무료 Gemini API 키를 연결하면 모든 영상 분석 기능을 제한 없이 이용하실 수 있습니다.</p>
+        </div>
+        <button class="sec" type="button" id="btnCloseGeminiModal">닫기 ✕</button>
+      </div>
+      <div class="reassure-badges">
+        <span class="reassure-badge">✓ 무료 사용 가능 (분당 15회 무료 요청)</span>
+        <span class="reassure-badge">✓ 신용카드 등록 불필요</span>
+        <span class="reassure-badge">🔒 AES-256-GCM 암호화 보관 (브라우저 localStorage에 키 원문 미저장)</span>
+      </div>
+      <div class="onboarding-steps">
+        <ol>
+          <li><b>1단계 (Google AI Studio 접속):</b> 아래 버튼을 눌러 기존 구글 계정으로 로그인합니다.</li>
+          <li><b>2단계 (API 키 생성):</b> 화면 좌측 상단 또는 중앙의 <b>[Create API key]</b> 파란색 버튼을 누릅니다.</li>
+          <li><b>3단계 (프로젝트 선택):</b> 팝업창에서 <b>[Create API key in new project]</b>(새 프로젝트에서 키 만들기)를 선택합니다.</li>
+          <li><b>4단계 (키 복사 및 붙여넣기):</b> 생성된 <code>AIza...</code>로 시작하는 긴 문자열 옆의 <b>[Copy]</b>를 누른 뒤 아래 입력창에 붙여넣어 주세요.</li>
+        </ol>
+        <div class="row">
+          <a class="sec" id="btnOpenAiStudio" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio 키 발급 페이지 바로 열기 ↗</a>
+        </div>
+      </div>
+      <label class="field">
+        <span class="lab">복사한 Gemini API 키 붙여넣기 (AIza...)</span>
+        <input class="inp" id="gemModalKeyInput" type="password" placeholder="AIza..." autocomplete="off">
+      </label>
+      <p class="hint" id="gemModalFormatHint">AIza로 시작하는 39자리 API 키를 붙여넣어 주세요.</p>
+      <p class="msg" id="gemModalResultMsg" role="status"></p>
+      <div class="row">
+        <button class="cta" type="button" id="btnModalSaveGemini" disabled>키 검증 후 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script src="auth.js"></script>
+<script src="data.js"></script>
+<script src="notes.js"></script>
+</body>
+</html>

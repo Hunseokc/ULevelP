@@ -1,0 +1,411 @@
+/* frontend/src/pages/LogPage.module.css */
+.logContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.headerBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pageSub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+.tab {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.headRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 주간·월간 요약 카드 */
+.logSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.summaryCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summaryTitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.summaryVal {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* 12주(84일) 잔디 달력 */
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.calDay {
+  aspect-ratio: 1 / 1;
+  min-height: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  cursor: pointer;
+  padding: 0;
+}
+
+.calDay[aria-pressed="true"] {
+  outline: 2px solid var(--orange-terra);
+  outline-offset: 1px;
+}
+
+.lv0 {
+  background: var(--bg);
+}
+.lv1 {
+  background: var(--guide);
+}
+.lv2 {
+  background: var(--blue-vivid);
+  opacity: 0.55;
+}
+.lv3 {
+  background: var(--blue-vivid);
+  opacity: 0.8;
+}
+.lv4 {
+  background: var(--ink);
+}
+
+.calLegend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.calLegend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+/* 날짜별 세션 및 곡 카드 목록 */
+.logSessions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sessionHead,
+.songCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sessionTitle {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.songDetailLink {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.songDetailLink:hover {
+  text-decoration: underline;
+}
+
+.sessionMemo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sessionMemoAct {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessionTakes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.takeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.takeMeta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.takeAudio {
+  width: 100%;
+  height: 36px;
+  margin-top: 4px;
+}
+
+/* 곡 필터 및 곡 편집 행 */
+.segPill {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.segBtn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.segBtn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.songCardEdit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selectPill {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.memoInlineInput {
+  flex: 1;
+  min-width: 160px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.ghostMini {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.ghostMini:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 타임라인 (<progress>) */
+.tlRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tlMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.tlBar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-card);
+  border: 0;
+  background: var(--line);
+}
+
+.tlMemo {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* A/B 비교 패널 */
+.abSlots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .abSlots {
+    grid-template-columns: 1fr;
+  }
+}
+
+.abSlot {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}

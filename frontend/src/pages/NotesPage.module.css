@@ -1,0 +1,280 @@
+/* frontend/src/pages/NotesPage.module.css */
+.headerBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 112%;
+  font-size: clamp(36px, 7vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 12px 0 0;
+  text-transform: uppercase;
+}
+
+.pageSub {
+  margin: 0;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.keyGateBox {
+  background: var(--surface2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.keyGateBox p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.keyGateActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.noteForm {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.preview {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.previewShow {
+  display: flex;
+}
+
+.preview img {
+  width: 120px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagBtn {
+  font: inherit;
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tagBtn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.filterTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filterBtn {
+  font: inherit;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.filterBtn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.runs li {
+  border-bottom: 1px solid var(--line);
+}
+
+.runItem {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.runItem img {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  display: block;
+}
+
+.runTitle {
+  font-weight: 700;
+}
+
+.runSub {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runActs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.badgeOk {
+  border-color: var(--ink);
+}
+
+.badgeFail {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.notesList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.noteCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noteCardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.noteCardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.noteCardTitle:hover {
+  text-decoration: underline;
+}
+
+.noteCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.noteCardHeadline {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.noteCardActs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  padding: 16px 0;
+}
+
+/* GA-1: 실패 원인 안내 */
+.runHint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}

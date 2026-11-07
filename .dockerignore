@@ -1,0 +1,13 @@
+.git
+.github
+.gradle
+build
+node_modules
+test
+docs
+개발산출물
+apps-script
+scripts
+*.md
+.env
+.env.*

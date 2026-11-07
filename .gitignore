@@ -1,0 +1,21 @@
+node_modules/
+.gradle/
+.kotlin/
+build/
+bin/
+.vscode/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+
+# Personal design profile (keep private)
+DESIGN.md
+
+test-results/
+dist/
+playwright-report/

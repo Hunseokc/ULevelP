@@ -1,0 +1,278 @@
+/* frontend/src/styles/tokens.css */
+/* DESIGN.md 확정 규칙:
+ * 1. 바탕은 순백(#FFFFFF)을 절대 쓰지 않고 웜 뉴트럴(#F0EEEA, 표면 #F6F6F1)을 기본값으로 쓴다.
+ * 2. 파란색(#1F3FC3)은 링크·근음 점 등 작은 면적에만 쓰고, 선택된 탭·칩·주 CTA 버튼은 가장 어두운 명도(#1D1D1F)로 만든다.
+ * 3. 주황색(#C34811 / #E64D01)은 지금 칠 음(.now)과 핵심 스트릭 강조에만 제한 사용한다.
+ * 4. 컨트롤(버튼·탭·토글·단일행 인풋·칩·배지)은 9999px 필(--radius-pill), 카드·패널·모달·썸네일·막대·멀티라인 텍스트영역은 0px 직각(--radius-card)만 쓰며 3~16px 중간 곡률은 전면 금지한다.
+ */
+:root {
+  /* 1. 기본 배경·표면·글자·선 (순백 #FFFFFF 금지) */
+  --bg: #F0EEEA;
+  --surface: #f6f6f1;
+  --surface2: #e1e0d6;
+  --ink: #1d1d1f;
+  --ink-navy: #191265;
+  --muted: #6b6a63;
+  --line: #cfcec4;
+
+  /* 2. 주 컨트롤 강조 (가장 어두운 명도) */
+  --accent: #1d1d1f;
+  --accent-ink: #f6f6f1;
+
+  /* 3. 메인 컬러 파랑 (울트라마린·코발트: 링크·근음 점 등 작은 면적 전용) */
+  --blue-vivid: #1f3fc3;
+  --blue-deep: #0b369a;
+  --accent-text: #1f3fc3;
+  --link: #1f3fc3;
+  --root: #1f3fc3;
+  --root-ink: #f6f6f1;
+  --guide: #c9cfee;
+  --guide-ink: #191265;
+  --other: #e1e0d6;
+  --other-line: #a3a196;
+
+  /* 4. 두 번째 포인트 주황 (테라코타: 지금 칠 음·바뀐 음·스트릭 포커스 전용) */
+  --orange-vivid: #e64d01;
+  --orange-terra: #c34811;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #c34811;
+  --moved: #c34811;
+
+  /* 5. 지판 및 상태 색상 */
+  --wood: #e6e5dc;
+  --wood-line: #a9a79b;
+  --string: #8c8a80;
+  --good: #2f6b3a;
+  --bad: #b3261e;
+
+  /* 6. 타이포그래피 */
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Archivo", "Noto Sans KR", system-ui, sans-serif;
+
+  /* 7. 형태 (중간 곡률 3~16px 전면 금지) */
+  --radius-pill: 9999px;
+  --radius-card: 0px;
+
+  /* 8. 레이아웃 정렬 규격 */
+  --container-max: 1120px;
+  --page-narrow-max: 840px;
+  --player-max: 1280px;
+  --header-height: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171716;
+    --surface: #20201e;
+    --surface2: #2b2a27;
+    --ink: #ecece4;
+    --ink-navy: #e2e5fb;
+    --muted: #9c9a92;
+    --line: #3a3935;
+    --accent: #ecece4;
+    --accent-ink: #171716;
+    --blue-vivid: #5c74f0;
+    --blue-deep: #3b52c4;
+    --accent-text: #9aa8f5;
+    --link: #9aa8f5;
+    --root: #5c74f0;
+    --root-ink: #f6f6f1;
+    --guide: #2f3770;
+    --guide-ink: #e2e5fb;
+    --other: #2e2d2a;
+    --other-line: #8c8a80;
+    --orange-vivid: #ff6b2b;
+    --orange-terra: #e07b4a;
+    --now: #f3d3bf;
+    --now-ink: #1d1d1f;
+    --now-ring: #e07b4a;
+    --moved: #e07b4a;
+    --wood: #1e1e1c;
+    --wood-line: #55534d;
+    --string: #8c8a80;
+    --good: #6fbf7e;
+    --bad: #f2867c;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171716;
+  --surface: #20201e;
+  --surface2: #2b2a27;
+  --ink: #ecece4;
+  --ink-navy: #e2e5fb;
+  --muted: #9c9a92;
+  --line: #3a3935;
+  --accent: #ecece4;
+  --accent-ink: #171716;
+  --blue-vivid: #5c74f0;
+  --blue-deep: #3b52c4;
+  --accent-text: #9aa8f5;
+  --link: #9aa8f5;
+  --root: #5c74f0;
+  --root-ink: #f6f6f1;
+  --guide: #2f3770;
+  --guide-ink: #e2e5fb;
+  --other: #2e2d2a;
+  --other-line: #8c8a80;
+  --orange-vivid: #ff6b2b;
+  --orange-terra: #e07b4a;
+  --now: #f3d3bf;
+  --now-ink: #1d1d1f;
+  --now-ring: #e07b4a;
+  --moved: #e07b4a;
+  --wood: #1e1e1c;
+  --wood-line: #55534d;
+  --string: #8c8a80;
+  --good: #6fbf7e;
+  --bad: #f2867c;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding-block: 20px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* 공통 필 버튼 (DESIGN.md: 높이 48px/52px, 글자 약 35%, 좌우 패딩 높이의 0.45~0.75배, 곡률 9999px) */
+.pillBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pillBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ghostBtn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ghostBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 공통 직각 카드·패널 (DESIGN.md: 곡률 0px 강제) */
+.cardBox,
+.panelBox {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.inpField {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 0 22px;
+  min-height: 48px;
+  width: 100%;
+  min-width: 0;
+}
+
+textarea.inpField {
+  border-radius: var(--radius-card);
+  padding: 14px 18px;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.msg {
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 20px;
+  margin: 0;
+}
+.msg.err {
+  color: var(--bad);
+}
+.msg.ok {
+  color: var(--good);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+

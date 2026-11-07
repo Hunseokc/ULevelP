@@ -1,0 +1,189 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # PR이 문서(*.md, docs/, 개발산출물/)만 바꿨으면 아래 테스트를 건너뜁니다.
+  # 워크플로 paths-ignore를 쓰면 필수 체크가 '대기'로 남아 머지가 막히므로 작업 단위로 거릅니다
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git -c core.quotePath=false diff --name-only "$BASE"...HEAD)
+          echo "$files"
+          code=$(echo "$files" | grep -vE '(\.md$|^docs/|^개발산출물/)' || true)
+          if [ -n "$code" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; else echo "code=false" >> "$GITHUB_OUTPUT"; echo "문서만 변경 — 테스트 건너뜀"; fi
+
+  test:
+    name: Test (Node ${{ matrix.node }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 20은 2026-04 지원 종료. Dockerfile(node:22)과 다음 LTS(24)로 확인합니다
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  e2e-security:
+    name: E2E XSS & CSP (Playwright, ${{ matrix.ui }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ui: [legacy, spa]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: matrix.ui == 'spa'
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          ULP_UI: ${{ matrix.ui }}
+
+  # Kotlin 서버(K0-1 이후). gradlew가 생기면 CI 수정 없이 ./gradlew test가 돌기 시작합니다
+  kotlin:
+    name: Kotlin test (JDK 21)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - id: detect
+        run: |
+          if [ -f gradlew ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "gradlew 없음 — Kotlin 테스트 건너뜀"; fi
+      - if: steps.detect.outputs.found == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: steps.detect.outputs.found == 'true'
+        uses: gradle/actions/setup-gradle@v5
+      - if: steps.detect.outputs.found == 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon
+
+  docker:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    needs: [test, kotlin]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build image
+        run: docker build -t guitar-chord-lab:ci .
+      - name: Run container
+        run: docker run -d --name app -p 3000:3000 guitar-chord-lab:ci
+      - name: Health check
+        run: |
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then
+              echo; echo "healthy"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs app
+          exit 1
+      - name: SPA entry served (React)
+        run: |
+          curl -fsS http://127.0.0.1:3000/ | grep -q 'id="root"'
+          ASSET=$(curl -fsS http://127.0.0.1:3000/practice.html | grep -oE '/assets/index-[^"]+\.js' | head -1)
+          test -n "$ASSET"
+          curl -fsS -o /dev/null "http://127.0.0.1:3000${ASSET}"
+      - name: Rollback switch (ULP_UI=legacy)
+        run: |
+          docker run -d --name app-legacy -e ULP_UI=legacy -p 3001:3000 guitar-chord-lab:ci
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:3001/api/health >/dev/null 2>&1 && break; sleep 1; done
+          # 응답을 먼저 받아 curl 실패를 잡는다(`! a | b`는 컨테이너가 안 떠도 통과한다)
+          BODY=$(curl -fsS http://127.0.0.1:3001/)
+          if grep -q 'id="root"' <<<"$BODY"; then echo "legacy 모드인데 React가 서빙됨"; exit 1; fi
+          grep -q 'src="home.js"' <<<"$BODY"
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f app || true
+          docker rm -f app-legacy || true
+
+  # ruleset 필수 체크는 이 작업 하나만 건다. 테스트를 건너뛴 문서 PR은 통과, 하나라도 실패·취소면 실패
+  ci-ok:
+    name: CI ok
+    runs-on: ubuntu-latest
+    needs: [changes, test, e2e-security, kotlin, docker]
+    if: always()
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [test, e2e-security, kotlin, docker]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      # Pages는 폐지(R1-A2): 옛 노션 링크·북마크가 살도록 레거시 화면과 같은 파일명으로 Cloud Run 이동 페이지만 올림.
+      # public/ 은 Cloud Run 롤백(ULP_UI=legacy)·E2E에 쓰여 저장소에 남는다
+      - name: Build redirect pages
+        run: |
+          mkdir -p _site
+          cp pages/redirect.js pages/redirect.css _site/
+          for f in public/*.html 404.html; do cp pages/redirect.html "_site/$(basename "$f")"; done
+          ls _site
+      # Pages는 모든 파일에 max-age=600을 걸어서, 새 HTML에 옛 CSS·JS가 섞일 수 있음.
+      # 배포마다 로컬 CSS·JS 주소에 커밋 버전을 붙여 HTML이 바뀌면 CSS·JS도 새로 받게 함
+      - name: Version asset URLs
+        run: |
+          v="${GITHUB_SHA::7}"
+          sed -i -E "s#(href|src)=\"([a-z0-9/_-]+\.(css|js))\"#\1=\"\2?v=$v\"#g" _site/*.html
+          grep -c "?v=$v" _site/*.html
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

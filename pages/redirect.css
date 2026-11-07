@@ -1,0 +1,36 @@
+/* 이동 페이지 전용 — public/styles.css 토큰 중 쓰는 것만 옮김 */
+:root {
+  --bg: #F0EEEA;
+  --ink: #1d1d1f;
+  --muted: #6b6a63;
+  --link: #1f3fc3;
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171716;
+    --ink: #ecece4;
+    --muted: #9c9a92;
+    --link: #9aa8f5;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+
+main {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 48px 16px;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 16px; }
+p { color: var(--muted); }
+a { color: var(--link); font-weight: 700; }
+[hidden] { display: none; }

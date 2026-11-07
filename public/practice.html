@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://www.googleapis.com; frame-src https://www.youtube.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>연습 플레이어</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="연습 플레이어">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="practice.css">
+<script src="theme.js"></script>
+</head>
+<body class="pp">
+<div class="pp-wrap">
+  <header class="pp-head">
+    <a class="pp-back" href="./" aria-label="첫 화면으로">⌂ HOME</a>
+    <div class="pp-title">
+      <b id="songTitle">연습 플레이어</b>
+      <span id="syncState" class="pp-sync" aria-live="polite"></span>
+    </div>
+    <button type="button" class="ghost pp-lib-btn" id="libBtn" aria-expanded="false" aria-controls="lib">곡 목록</button>
+    <a class="ghost pp-auth-btn" href="settings.html#account" id="navAuth">LOGIN</a>
+  </header>
+
+  <main class="pp-main">
+    <section class="pp-stage">
+      <div class="pp-video" id="videoBox">
+        <div id="player"></div>
+        <div class="pp-empty" id="emptyState">
+          <p><b>연습할 영상을 고르세요</b></p>
+          <p class="note">곡 목록에서 고르거나, 유튜브 링크를 붙여넣으세요.</p>
+          <form class="pp-url" id="urlForm">
+            <input type="url" id="urlInput" placeholder="https://youtu.be/…" inputmode="url" autocomplete="off" aria-label="유튜브 링크">
+            <button class="btn" type="submit">열기</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="pp-seek" id="seekRow">
+        <span class="pp-time" id="tNow">0:00</span>
+        <div class="pp-bar" id="bar">
+          <svg class="pp-bar-svg" viewBox="0 0 1000 44" preserveAspectRatio="none" aria-hidden="true">
+            <rect class="pp-bar-track" x="0" y="19" width="1000" height="6"></rect>
+            <rect class="pp-bar-loop" id="barLoop" x="0" y="14" width="0" height="16" hidden></rect>
+            <rect class="pp-bar-fill" id="barFill" x="0" y="19" width="0" height="6"></rect>
+          </svg>
+          <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="재생 위치">
+        </div>
+        <span class="pp-time" id="tDur">0:00</span>
+      </div>
+    </section>
+
+    <section class="pp-ctl" aria-label="연습 조작">
+      <div class="pp-group">
+        <div class="pp-lab">속도</div>
+        <div class="pp-seg" id="rates" role="group" aria-label="재생 속도"></div>
+      </div>
+
+      <div class="pp-group">
+        <div class="pp-lab"><span>구간 반복 · 시작 전 여유</span><span id="loopInfo" class="pp-loopinfo"></span></div>
+        <div class="pp-ab">
+          <div class="pp-pt">
+            <button type="button" class="pp-nudge" data-pt="a" data-d="-0.2" aria-label="A 0.2초 앞으로">−</button>
+            <button type="button" class="pp-setpt" id="setA"><small>A</small><span id="aTime">--:--</span></button>
+            <button type="button" class="pp-nudge" data-pt="a" data-d="0.2" aria-label="A 0.2초 뒤로">+</button>
+          </div>
+          <div class="pp-pt">
+            <button type="button" class="pp-nudge" data-pt="b" data-d="-0.2" aria-label="B 0.2초 앞으로">−</button>
+            <button type="button" class="pp-setpt" id="setB"><small>B</small><span id="bTime">--:--</span></button>
+            <button type="button" class="pp-nudge" data-pt="b" data-d="0.2" aria-label="B 0.2초 뒤로">+</button>
+          </div>
+        </div>
+        <div class="pp-looprow">
+          <button type="button" class="pp-toggle" id="loopBtn" aria-pressed="false">반복</button>
+          <div class="pp-seg pp-lead" id="leads" role="group" aria-label="반복 전 여유"></div>
+          <button type="button" class="pp-icon" id="clearBtn" aria-label="구간 지우기">✕</button>
+        </div>
+      </div>
+
+      <div class="pp-group">
+        <div class="pp-lab">
+          <span>녹음 · 오늘 연습 기록에 올라가요</span>
+          <span class="pp-drive-badge" id="recDriveBadge" hidden>✓ Google Drive 무제한 저장 중</span>
+        </div>
+        <div class="pp-drive-banner" id="recDriveBanner" hidden>
+          <span id="recDriveBannerText">Google Drive 미연결 시 가장 최근 연습 곡 1곡만 서버에 녹음할 수 있어요.</span>
+          <button type="button" class="btn pp-drive-btn" id="btnRecDriveConnect">Google Drive 연결 (무제한 저장)</button>
+        </div>
+        <div class="pp-recrow">
+          <button type="button" class="pp-toggle pp-rec" id="recBtn" aria-pressed="false">● 녹음</button>
+          <button type="button" class="pp-icon pp-recact" id="recRetry" hidden>다시 올리기</button>
+          <a class="pp-icon pp-recact" id="recSave" hidden>파일 저장</a>
+        </div>
+        <audio id="recPlay" controls preload="metadata" hidden></audio>
+        <p class="note pp-recmsg" id="recMsg" aria-live="polite"></p>
+      </div>
+
+      <div class="pp-transport">
+        <button type="button" class="pp-tbtn" id="backBtn" aria-label="5초 뒤로">−5</button>
+        <button type="button" class="pp-tbtn" id="startBtn" aria-label="구간 처음으로">⏮</button>
+        <button type="button" class="pp-tbtn pp-play" id="playBtn" aria-label="재생">▶</button>
+        <button type="button" class="pp-tbtn" id="fwdBtn" aria-label="5초 앞으로">+5</button>
+        <button type="button" class="pp-tbtn" id="saveBtn" aria-label="저장">저장</button>
+      </div>
+      <p class="note pp-hint" id="kbdHint">키보드: Space 재생 · 1~4 속도 · [ ] A·B · L 반복 · R 구간 처음 · M 녹음</p>
+    </section>
+  </main>
+</div>
+
+<aside class="pp-lib" id="lib" hidden>
+  <div class="pp-lib-head">
+    <b>연습 곡</b>
+    <button type="button" class="pp-icon" id="libClose" aria-label="닫기">✕</button>
+  </div>
+  <form class="pp-url" id="urlForm2">
+    <input type="url" id="urlInput2" placeholder="유튜브 링크 붙여넣기" inputmode="url" autocomplete="off" aria-label="유튜브 링크">
+    <button class="btn" type="submit">열기</button>
+  </form>
+  <ul class="pp-songs" id="songs"></ul>
+  <a class="pp-settings" href="settings.html#notion">노션 연결 설정 →</a>
+</aside>
+<div class="pp-scrim" id="scrim" hidden></div>
+
+<div class="pp-modal-backdrop" id="takeLimitModal" role="dialog" aria-modal="true" aria-labelledby="takeLimitTitle" hidden>
+  <div class="pp-modal-card">
+    <h2 class="pp-modal-title" id="takeLimitTitle">이전 연습 곡의 서버 녹음이 남아 있어요</h2>
+    <p class="pp-modal-desc" id="takeLimitDesc">Google Drive 미연결 상태에서는 가장 최근 연습 곡 1곡만 서버에 녹음을 저장할 수 있습니다. 개인 Google Drive를 연결해 모든 곡의 녹음을 무제한 보관하거나, 이전 곡의 서버 녹음을 지우고 현재 곡 녹음으로 교체할 수 있어요. (이미 Google Drive에 저장된 녹음은 지워지지 않아요)</p>
+    <div class="pp-modal-actions">
+      <button type="button" class="btn" id="btnTakeLimitConnectDrive">Google Drive 연결하고 무제한 저장 (권장)</button>
+      <button type="button" class="ghost" id="btnTakeLimitReplaceOld">이전 곡 녹음 지우고 현재 곡 녹음 저장</button>
+      <button type="button" class="ghost" id="btnTakeLimitClose">취소 (파일로 직접 저장 가능)</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="auth.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="drive.js"></script>
+<script src="data.js"></script>
+<script src="practice.js"></script>
+</body>
+</html>

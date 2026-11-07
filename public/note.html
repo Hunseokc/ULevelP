@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com 'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; media-src 'self' blob: https://vefrfhafmiiivpgjhqiu.supabase.co; connect-src 'self' https://vefrfhafmiiivpgjhqiu.supabase.co https://www.googleapis.com; frame-src https://www.youtube.com https://accounts.google.com; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학습 노트 상세 · ULeveLP</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="site.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="page">
+  <nav class="site-nav" aria-label="사이트">
+    <a href="./">⌂ HOME</a>
+    <span class="links"><a href="log.html">LOG</a><a href="notes.html">NOTES</a><a href="settings.html">SETTING</a><a href="settings.html#account" id="navAuth">LOGIN</a></span>
+  </nav>
+
+  <p class="back-link"><a href="notes.html">← 학습 노트 목록</a></p>
+
+  <div id="noteContent" hidden>
+    <div class="card" id="noteHeader">
+      <h1 class="page-title" id="noteTitle"></h1>
+      <div class="note-meta" id="noteMeta"></div>
+      <div class="note-badges">
+        <span class="badge" id="noteDifficulty"></span>
+        <span id="noteTags"></span>
+      </div>
+      <div class="row note-actions">
+        <a id="notePracticeLink" class="cta">▶ 플레이어에서 연습</a>
+        <a id="noteYoutubeLink" class="sec" target="_blank" rel="noopener">유튜브 원본 ↗</a>
+        <button id="btnDeleteNote" class="ghost" type="button">노트 삭제</button>
+      </div>
+    </div>
+
+    <div class="card summary-box" id="noteSummaryBox">
+      <h2>핵심 요약</h2>
+      <p class="headline" id="noteHeadline"></p>
+      <ul class="points" id="notePoints"></ul>
+      <div class="keywords" id="noteKeywords"></div>
+    </div>
+
+    <div id="noteSections"></div>
+
+    <div class="card" id="noteMomentsBox">
+      <h2>주요 구간</h2>
+      <ul class="moments-list" id="noteMoments"></ul>
+    </div>
+
+    <div class="card" id="notePracticeBox">
+      <h2>연습 과제</h2>
+      <div class="practice-list" id="notePractice"></div>
+    </div>
+
+    <div class="card edit-panel" id="noteEditPanel">
+      <h2>메모 및 태그 편집</h2>
+      <div class="field">
+        <span class="lab">태그</span>
+        <div class="tags" id="editTags" role="group" aria-label="태그 편집"></div>
+      </div>
+      <label class="field">
+        <span class="lab">메모</span>
+        <textarea class="inp" id="noteMemoInput" placeholder="노트에 대한 메모를 남겨보세요."></textarea>
+      </label>
+      <div class="row">
+        <button id="btnSaveNote" class="sec" type="button">메모·태그 저장</button>
+      </div>
+      <p class="msg" id="noteEditMsg" role="status"></p>
+    </div>
+  </div>
+
+  <p class="empty" id="noteLoadingMsg">학습 노트를 불러오는 중...</p>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="site.js"></script>
+<script src="auth.js"></script>
+<script src="data.js"></script>
+<script src="note.js"></script>
+</body>
+</html>
+

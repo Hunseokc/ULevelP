@@ -1,0 +1,610 @@
+/* frontend/src/pages/ChordsPage.module.css */
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  font-size: 21px;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.practiceLink {
+  text-decoration: none;
+  margin-left: auto;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.subText {
+  color: var(--muted);
+  margin: 2px 0 0;
+  max-width: 68ch;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  max-width: 72ch;
+}
+
+.lead b {
+  color: var(--ink);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field > label,
+.lab {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.selectField,
+.numField {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 7px 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  padding-bottom: 6px;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn,
+.playbtn {
+  font: inherit;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 9px 20px;
+  cursor: pointer;
+}
+
+/* 폼 그리드 안 재생 버튼: 칸을 채우지 않고 입력칸 아랫선에 맞춤(FT-3-chords, 재해석 탭) */
+.controls > .playbtn {
+  align-self: end;
+  justify-self: start;
+}
+
+.playbtn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.ghost {
+  font: inherit;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.mini {
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.status,
+.note,
+.meta {
+  color: var(--muted);
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.3;
+}
+
+.chip small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip[aria-pressed="true"] small {
+  color: var(--accent-ink);
+  opacity: 0.85;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  align-items: center;
+}
+
+.legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.h3 {
+  font-size: 14px;
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.boxrow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.boxrowTight {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.cell {
+  margin: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 8px 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-card);
+}
+
+.seq {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.seqSummary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 8px 12px;
+}
+
+.scHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.scTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.scNotes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scCircle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.scSliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px 24px;
+}
+
+.scSl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scSl input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.ccTop {
+  display: grid;
+  grid-template-columns: auto minmax(150px, auto) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.stepstrip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* 5도권 단계 버튼 — public/styles.css .step 이식(FT-3-chords) */
+.ccStep { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: var(--radius-pill); padding: 5px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.25; min-width: 0; }
+.ccStep b { font-size: 12px; }
+.ccStep span { font-size: 11px; color: var(--muted); }
+.ccStepCur { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.ccStepBad { opacity: .55; text-decoration: line-through; }
+
+.riGrid {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.quiz {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 14px;
+}
+
+.dsStepCard {
+  margin: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dsStepCard span,
+.dsStepCard small { color: var(--muted); }
+
+.dsStepCardSel {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.dsStepCardNow {
+  background: var(--now);
+  border-color: var(--now-ring);
+}
+
+/* 전역 SVG 다이어그램 및 범례 스타일 격리 보장 (RZ-2 단독 빌드 호환) */
+/* 범례 색 — .legend는 모듈 클래스라 :global(.legend …)로는 맞지 않았음(FT-3-chords) */
+.legend :global(.g) { background: var(--guide); }
+.legend :global(.r) { background: var(--root); }
+.legend :global(.o) { background: var(--other); border: 1px solid var(--other-line); }
+.legend :global(.m) { border: 2px dashed var(--moved); }
+.legend :global(.n) { background: var(--now); box-shadow: 0 0 0 2px var(--now-ring); }
+.legend :global(.ctxk) { background: var(--surface); border: 1px solid var(--other-line); }
+.legend :global(.blkk) { border-radius: var(--radius-card); border: 2px solid var(--accent); background: transparent; width: 14px; }
+.legend :global(.lowest-k) { background: var(--root); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--orange-terra); }
+
+:global(.scn) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 38px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  line-height: 1.2;
+}
+:global(.scn b) { font-family: var(--font-mono); font-size: 13px; }
+:global(.scn small) { font-size: 11px; color: var(--muted); }
+:global(.scn.root) { border-color: var(--root); background: var(--root); }
+:global(.scn.root b), :global(.scn.root small) { color: var(--root-ink); }
+:global(.scn.moved) { border: 2px dashed var(--moved); }
+
+:global(.seqn) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 2px 6px;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 4px;
+}
+:global(.seqn b) { color: var(--ink); }
+:global(.seqn.root b) { color: var(--accent-text); }
+:global(.seqn.now) { background: var(--now); border-color: var(--now-ring); color: var(--now-ink); }
+
+:global(svg.fb) { display: block; }
+:global(svg.fb .wood) { fill: var(--wood); }
+:global(svg.fb .fret) { stroke: var(--wood-line); stroke-width: 1.2; }
+:global(svg.fb .nut) { stroke: var(--ink); stroke-width: 4; }
+:global(svg.fb .str) { stroke: var(--string); }
+:global(svg.fb .inlay) { fill: var(--wood-line); opacity: 0.45; }
+:global(svg.fb .slab), :global(svg.fb .flab) {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+:global(svg.fb .hit) { fill: transparent; cursor: pointer; }
+:global(svg.fb .hit:hover) { fill: var(--accent); opacity: 0.15; }
+
+:global(svg.sb) { width: 100%; height: auto; min-width: 620px; }
+:global(svg.sb .nd) { pointer-events: auto; cursor: pointer; }
+:global(svg.sb .nd text) { font-size: 11px; }
+:global(svg.sb .nd.now circle) { stroke-width: 4; }
+:global(svg.sb .slab) { font-size: 11px; font-weight: 700; }
+:global(svg.sb .flab) { font-size: 12px; }
+:global(svg.sb .flab.mark) { fill: var(--ink); font-weight: 700; }
+:global(svg.sb .blk) { fill: var(--accent); fill-opacity: 0.07; stroke: var(--accent); stroke-width: 2.5; }
+:global(svg.sb .nd.ctx circle) { fill: var(--surface); stroke: var(--other-line); stroke-width: 1; opacity: 0.85; }
+:global(svg.sb .nd.ctx text) { fill: var(--muted); font-size: 10px; font-weight: 500; }
+:global(svg.sb .nd.ctx.root circle) { stroke: var(--root); stroke-width: 1.8; }
+:global(svg.sb .nd.ctx.root text) { fill: var(--accent-text); font-weight: 700; }
+:global(svg.sb .nd.press circle) { stroke: var(--ink); stroke-width: 2.4; }
+:global(svg.sb .nd.press text) { font-size: 12px; }
+:global(svg.sb .nd .lr-ring) {
+  fill: none;
+  stroke: var(--orange-terra);
+  stroke-width: 2.2;
+  stroke-dasharray: 4 2;
+  pointer-events: none;
+}
+
+:global(svg .nd circle) { fill: var(--other); stroke: var(--other-line); stroke-width: 1.2; }
+:global(svg .nd text) {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--ink);
+  pointer-events: none;
+}
+:global(svg.fb .nd text) { font-size: 9px; }
+:global(svg .nd.guide circle) { fill: var(--guide); stroke: var(--root); stroke-width: 1; }
+:global(svg .nd.guide text) { fill: var(--guide-ink); }
+:global(svg .nd.root circle) { fill: var(--root); stroke: var(--root); }
+:global(svg .nd.root text) { fill: var(--root-ink); }
+:global(svg .nd.moved circle) { stroke: var(--moved); stroke-width: 2.6; stroke-dasharray: 3 2; }
+:global(svg .nd.now circle) { fill: var(--now); stroke: var(--now-ring); stroke-width: 3; }
+:global(svg .nd.now text) { fill: var(--now-ink); }
+
+:global(svg.cb) { display: block; }
+/* 칸이 다이어그램(고정 110px)보다 좁아지면 비율 유지하며 줄인다 — FT-2 F1 */
+.cell :global(svg.cb) { max-width: 100%; height: auto; }
+/* 칸 캡션 — public/styles.css .cell figcaption 이식(FT-3-chords, SPA에서 누락돼 이름·프렛이 붙어 보였음) */
+.cell figcaption { display: flex; flex-direction: column; align-items: center; gap: 0; text-align: center; }
+.cell figcaption b { font-size: 13px; }
+.cell figcaption span { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.cell figcaption em { font-style: normal; font-size: 11px; color: var(--muted); max-width: 120px; }
+:global(svg.cb .fl) { stroke: var(--muted); stroke-width: 1; }
+:global(svg.cb .nut) { stroke: var(--ink); stroke-width: 3; }
+:global(svg.cb .st) { stroke: var(--muted); stroke-width: 1; }
+:global(svg.cb .open) { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+:global(svg.cb .mut) { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+:global(svg.cb .fr) { font-family: var(--font-mono); font-size: 8px; fill: var(--muted); text-anchor: end; dominant-baseline: central; }
+
+:global(svg.wheel .ring) { fill: none; stroke: var(--line); stroke-width: 1.5; }
+:global(svg.wheel .wn) { cursor: pointer; }
+:global(svg.wheel .wn circle) { fill: var(--surface); stroke: var(--line); }
+:global(svg.wheel .wn text) { font-family: var(--font-mono); font-size: 10px; font-weight: 700; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+:global(svg.wheel .wn.cur circle) { fill: var(--accent); stroke: var(--accent); }
+:global(svg.wheel .wn.cur text) { fill: var(--accent-ink); }
+:global(svg.wheel .wn.nxt circle) { stroke: var(--accent); stroke-dasharray: 3 2; stroke-width: 1.5; }
+:global(svg.wheel .wn.bad text) { fill: var(--muted); }
+:global(svg.wheel .wc) { font-size: 13px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
+:global(svg.wheel .wc2) { font-size: 15px; font-weight: 700; fill: var(--accent-text); text-anchor: middle; font-family: var(--font-mono); }
+
+@media (max-width: 640px) {
+  .scCircle,
+  .ccTop,
+  .riGrid,
+  .quiz {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .stepstrip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .results {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* CH-5b: 8 · 진행 연주 */
+.ppInput {
+  flex: 1 1 220px;
+  width: auto;
+}
+.ppBoxes {
+  justify-content: flex-start;
+}
+.ppSeed {
+  text-decoration: none;
+}
+.ppBoxes figcaption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+}
+.ppBoxes figcaption span,
+.ppBoxes figcaption small {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
